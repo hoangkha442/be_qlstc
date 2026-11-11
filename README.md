@@ -1,6 +1,6 @@
 # Hoàng Kha Learning — Backend
 
-NestJS, MongoDB replica set, JWT, Cloudinary riêng tư và gửi mã tra cứu qua Gmail. Yêu cầu Node.js 24, Yarn 1. Swagger tại `/api/docs`. Bản bàn giao không chứa test, fixtures hoặc dữ liệu demo.
+NestJS, MongoDB replica set, JWT, Cloudinary riêng tư và gửi email qua Brevo HTTPS API hoặc Gmail. Yêu cầu Node.js 24, Yarn 1. Swagger tại `/api/docs`. Bản bàn giao không chứa test, fixtures hoặc dữ liệu demo.
 
 ## Chạy ứng dụng
 
@@ -28,11 +28,27 @@ Phát triển: `yarn start:dev`. Kiểm tra mã và build: `yarn verify`.
 | `CLOUDINARY_CLOUD_NAME` | Cloud name.                                                                                                                                                          |
 | `CLOUDINARY_API_KEY`    | API key thuộc cùng Product Environment.                                                                                                                              |
 | `CLOUDINARY_API_SECRET` | API secret tương ứng.                                                                                                                                                |
-| `GMAIL_USER`            | Địa chỉ Gmail dùng để gửi mã xem lại bài.                                                                                                                            |
-| `GMAIL_APP_PASSWORD`    | Mật khẩu ứng dụng Google gồm 16 ký tự; chấp nhận dán kèm khoảng trắng.                                                                                               |
+| `MAIL_PROVIDER`         | `gmail` (mặc định, tương thích cấu hình cũ) hoặc `brevo`. Render Free dùng `brevo`.                                                                                  |
+| `BREVO_API_KEY`         | API key của tài khoản Brevo; bắt buộc khi dùng `brevo` trong production. Không dùng SMTP key.                                                                        |
+| `MAIL_FROM_EMAIL`       | Email người gửi đã xác minh trong Brevo; bắt buộc khi dùng `brevo` trong production.                                                                                 |
+| `GMAIL_USER`            | Địa chỉ Gmail gửi thư; chỉ dùng với `MAIL_PROVIDER=gmail`.                                                                                                           |
+| `GMAIL_APP_PASSWORD`    | Mật khẩu ứng dụng Google gồm 16 ký tự; chỉ dùng với `MAIL_PROVIDER=gmail`.                                                                                           |
 | `TRUST_PROXY`           | Chỉ đặt `1` sau một reverse proxy tin cậy.                                                                                                                           |
 
-### Thiết lập Gmail
+### Brevo HTTPS API cho Render Free
+
+Render Free chặn SMTP nên không dùng Gmail App Password trực tiếp ở môi trường này. `render.yaml` chọn `MAIL_PROVIDER=brevo`; ứng dụng gọi `POST https://api.brevo.com/v3/smtp/email` qua HTTPS, có timeout 15 giây. Không bổ sung hàng đợi hoặc API quản lý email.
+
+1. Tạo tài khoản Brevo Free và xác nhận tài khoản. Nếu Brevo yêu cầu kích hoạt gửi transactional email, hoàn tất bước đó trước khi thử gửi.
+2. Trong phần **Senders**, thêm người gửi tên **Hoàng Kha Learning**, nhập địa chỉ email bạn quản lý và xác minh qua email. Khi chưa có tên miền riêng, có thể bắt đầu bằng địa chỉ cá nhân đã xác minh. Brevo có thể thay địa chỉ From bằng địa chỉ thuộc hạ tầng của họ; nên xác thực tên miền riêng khi có để cải thiện nhận diện và khả năng phát thư.
+3. Trong **SMTP & API → API Keys**, tạo API key cho backend. Chọn API key, không lấy SMTP key; tên menu có thể thay đổi theo giao diện Brevo.
+4. Đặt `MAIL_PROVIDER=brevo`, `MAIL_FROM_EMAIL` bằng đúng địa chỉ đã xác minh và `BREVO_API_KEY` bằng key vừa tạo trong Render Environment. Không cần `GMAIL_APP_PASSWORD` khi chọn Brevo.
+
+Người nhận trả lời về `MAIL_FROM_EMAIL` qua Reply-To. Brevo Free hiện có giới hạn 300 email/ngày, dùng chung cho các lần cấp tài khoản, đặt lại mật khẩu và gửi biên nhận; kiểm tra quota và trạng thái gửi trong Brevo khi thư chưa tới. `emailSent` chỉ biểu thị dịch vụ đã nhận yêu cầu, không bảo đảm thư nằm trong inbox. Không tự gửi lại email khi timeout để tránh gửi trùng; các luồng thử lại hiện có vẫn được giữ.
+
+Tài liệu: [Render chặn SMTP trên Free](https://render.com/changelog/free-web-services-will-no-longer-allow-outbound-traffic-to-smtp-ports), [Brevo transactional API](https://developers.brevo.com/reference/send-transac-email), [xác minh sender](https://help.brevo.com/hc/en-us/articles/208836149-Create-a-new-sender-From-name-and-From-email), [giới hạn Free](https://help.brevo.com/hc/en-us/articles/208580669-FAQs-What-are-the-limits-of-the-Free-plan), [địa chỉ gửi thay thế](https://help.brevo.com/hc/en-us/articles/14925263522578-Comply-with-Gmail-Yahoo-and-Microsoft-s-requirements-for-email-senders).
+
+### Gmail cho máy local hoặc hosting cho phép SMTP
 
 1. Bật xác minh hai bước cho tài khoản Google dùng để gửi thư.
 2. Mở [Mật khẩu ứng dụng](https://myaccount.google.com/apppasswords), tạo mật khẩu cho ứng dụng nộp bài.
@@ -41,7 +57,37 @@ Phát triển: `yarn start:dev`. Kiểm tra mã và build: `yarn verify`.
 
 Google yêu cầu xác minh hai bước để dùng mật khẩu ứng dụng; một số tài khoản tổ chức có thể không có lựa chọn này. Xem [hướng dẫn Google](https://support.google.com/accounts/answer/185833).
 
-Ứng dụng dùng cấu hình Gmail có sẵn của Nodemailer; không cần khai báo host, port hoặc địa chỉ gửi riêng. Production yêu cầu điền đủ hai biến khi khởi động. Khi phát triển, nếu chưa cấu hình Gmail, API học tập vẫn chạy nhưng yêu cầu nộp bài mới trả `503 MAIL_NOT_CONFIGURED` trước khi upload file. `render.yaml` dùng cùng hai biến Gmail khi triển khai.
+Ứng dụng dùng cấu hình Gmail có sẵn của Nodemailer; không cần khai báo host, port hoặc địa chỉ gửi riêng. Khi chưa đặt `MAIL_PROVIDER`, cấu hình cũ tiếp tục dùng Gmail. Production kiểm tra đủ các biến của dịch vụ được chọn; cấu hình Gmail không phải điều kiện khởi động khi dùng Brevo. Khi phát triển, nếu dịch vụ được chọn chưa có cấu hình, API học tập vẫn chạy nhưng yêu cầu nộp bài mới trả `503 MAIL_NOT_CONFIGURED` trước khi upload file.
+
+## Triển khai Render + Vercel
+
+Repo backend hiện tại là `hoangkha442/be_qlstc`, có `package.json` ngay ở gốc. Trên Render chọn **New → Web Service**, kết nối repo rồi đặt:
+
+| Thiết lập         | Giá trị                                                                                                 |
+| ----------------- | ------------------------------------------------------------------------------------------------------- |
+| Name              | `hoang-kha-learning-api` hoặc tên còn trống                                                             |
+| Branch            | `master`                                                                                                |
+| Root Directory    | Để trống với repo backend riêng này. Chỉ đặt `server` nếu sau này deploy từ monorepo có thư mục server. |
+| Runtime           | Node                                                                                                    |
+| Instance          | Free                                                                                                    |
+| Build Command     | `yarn install --frozen-lockfile --production=false && yarn build`                                       |
+| Start Command     | `yarn start:prod`                                                                                       |
+| Health Check Path | `/api/health`                                                                                           |
+
+Biến môi trường cần nhập trên Render:
+
+- `NODE_ENV=production`, `NODE_VERSION=24.22.1`, `TRUST_PROXY=1`, `MAIL_PROVIDER=brevo`.
+- `MONGODB_URI`: MongoDB Atlas hỗ trợ transaction. Trong Atlas Network Access, thêm các CIDR ở Render **Connect → Outbound**; không cần mở toàn bộ IP chỉ để triển khai.
+- `JWT_SECRET`, `RECEIPT_SECRET`: ít nhất 32 ký tự và khác nhau. **Nếu dùng database hiện tại, giữ các khóa đang dùng, đặc biệt `RECEIPT_SECRET` để tra cứu các bài đã nộp.** Blueprint yêu cầu nhập `RECEIPT_SECRET`, không tự tạo khóa thay thế cho database cũ.
+- `FRONTEND_URL`: origin HTTPS của frontend Vercel thực tế, không có dấu `/` cuối hoặc đường dẫn. Nếu nhiều origin, ngăn cách dấu phẩy và để địa chỉ production đầu tiên vì email dùng địa chỉ đó. Vercel preview có origin riêng; chỉ thêm origin cần dùng, không thay bằng ký tự `*`.
+- `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, `CLOUDINARY_API_SECRET`: cùng Product Environment, dùng giá trị thật của hệ thống.
+- `BREVO_API_KEY`, `MAIL_FROM_EMAIL`: cấu hình theo phần Brevo phía trên.
+
+Render tự cung cấp `PORT`; server đã đọc biến này và lắng nghe `0.0.0.0`. Không chạy seed trong build hoặc start. Nếu đã dùng MongoDB cũ thì giữ tài khoản/dữ liệu cũ; nếu database mới chưa có giảng viên, chạy lệnh provision có chủ đích theo phần Tài khoản giảng viên.
+
+Sau deploy, mở URL thật của service kèm `/api/health`; kết quả cần có `status: ok` và `database: connected`. Sau đó trong Vercel Environment đặt `VITE_API_URL` bằng **URL backend thật + `/api`** và redeploy frontend vì Vite lấy giá trị khi build. Cập nhật `FRONTEND_URL` trên Render bằng domain Vercel production thực tế nếu khác giá trị ban đầu. `.env` local không tự chuyển sang Render và không đưa key backend vào biến frontend.
+
+`render.yaml` dùng cho Blueprint của repo backend riêng; có thể dùng nó hoặc nhập các giá trị tương đương trong Dashboard. Tham khảo [Web Services](https://render.com/docs/web-services), [Node version](https://render.com/docs/node-version), [Outbound IP](https://render.com/docs/outbound-ip-addresses).
 
 ## Tài khoản giảng viên
 
@@ -84,17 +130,17 @@ Giới hạn: tối đa 5 file, 10 MiB/file, chỉ `doc`, `docx`, `ppt`, `pptx`,
 
 Tra cứu cần body `receiptCode`, `secret`. Tải file cần thêm `version` là số nguyên từ 1 và `fileIndex` từ 0. Mã bí mật truyền trong body, không đưa vào URL. API tải file trả nội dung đính kèm, không lộ URL Cloudinary.
 
-Response nộp bài có `emailSent` boolean và `message`. `emailSent: true` nghĩa là Gmail đã nhận yêu cầu gửi thư. Nếu `false`, bài vẫn đã lưu thành công; sinh viên có thể lưu mã ngay trên màn hình hoặc thử lại cùng yêu cầu để gửi lại email. API tra cứu chỉ đọc bài, không gửi email.
+Response nộp bài có `emailSent` boolean và `message`. `emailSent: true` nghĩa là dịch vụ email đã nhận yêu cầu gửi thư. Nếu `false`, bài vẫn đã lưu thành công; sinh viên có thể lưu mã ngay trên màn hình hoặc thử lại cùng yêu cầu để gửi lại email. API tra cứu chỉ đọc bài, không gửi email.
 
 ### Gửi mã xem lại bài
 
-Backend lưu bài nộp thành công trước, sau đó gửi email trực tiếp qua Gmail trong cùng yêu cầu HTTP. Lỗi Gmail không xóa bài hoặc tạo thêm phiên bản bài nộp. Không có bảng hàng đợi, tác vụ nền hoặc API quản lý email cho Đại cương.
+Backend lưu bài nộp thành công trước, sau đó gửi email qua dịch vụ được chọn trong cùng yêu cầu HTTP. Lỗi email không xóa bài hoặc tạo thêm phiên bản bài nộp. Không có bảng hàng đợi, tác vụ nền hoặc API quản lý email cho Đại cương.
 
 Email chứa MSSV, họ tên, học kỳ/năm học, lớp, môn, học phần, tên bài, phiên bản, thời gian Việt Nam, đúng/trễ hạn, danh sách file, mã biên nhận, mã bí mật và liên kết `/lookup`. Sinh viên dùng hai mã này để xem lại thông tin và tải file, không cần đăng nhập. Không đính kèm file Office hoặc URL Cloudinary. Mã bí mật được khôi phục khi gửi từ `RECEIPT_SECRET`, không lưu plaintext. HTML của dữ liệu nhập được escape. Giữ kín email này.
 
 Thử lại cùng `Idempotency-Key` và nội dung sẽ trả lại bài đã lưu và gửi lại email tới địa chỉ của phiên bản đó; không tạo phiên bản mới. Có thể nhận lại cùng mã qua nhiều email nếu thử lại nhiều lần. Không tự gửi lại ở nền hoặc gửi thư cũ từ collection email của bản trước.
 
-Client đã có input email, xác nhận địa chỉ nhận mã, xử lý `emailSent` và nút gửi lại mã khi Gmail gặp lỗi. Email nằm trong fingerprint phía client. Trang tra cứu và biên nhận tải file bằng POST với mã bí mật trong body. Xem [hướng dẫn client](../client/README.md).
+Client đã có input email, xác nhận địa chỉ nhận mã, xử lý `emailSent` và nút gửi lại mã khi gửi thư gặp lỗi. Email nằm trong fingerprint phía client. Trang tra cứu và biên nhận tải file bằng POST với mã bí mật trong body. Xem [hướng dẫn client](../client/README.md).
 
 ## Chuyên ngành
 
@@ -110,7 +156,7 @@ Client đã có input email, xác nhận địa chỉ nhận mã, xử lý `emai
 | Đổi mật khẩu                          | `POST /api/student/auth/change-password`         |
 | Đăng xuất các phiên                   | `POST /api/student/auth/logout`                  |
 
-Cấp tài khoản cần `username`, `studentCode`, `fullName`, `email`. Username không phân biệt hoa/thường, duy nhất toàn hệ thống; MSSV duy nhất trong phạm vi giảng viên. Khi tạo hoặc đặt lại mật khẩu, hệ thống gửi email Gmail gồm liên kết `/specialized/login` trên origin đầu tiên của `FRONTEND_URL`, tên đăng nhập và mật khẩu tạm. Mật khẩu chỉ lưu bcrypt, không trả plaintext qua API. Response có `student`, `emailSent`, `message`. Nếu Gmail chưa được cấu hình, dừng trước khi tạo/đổi tài khoản. Nếu gửi lỗi sau khi lưu, tài khoản vẫn tồn tại; sửa Gmail rồi đặt lại mật khẩu để gửi email mới. Sinh viên dùng email cấp lại mới nhất.
+Cấp tài khoản cần `username`, `studentCode`, `fullName`, `email`. Username không phân biệt hoa/thường, duy nhất toàn hệ thống; MSSV duy nhất trong phạm vi giảng viên. Khi tạo hoặc đặt lại mật khẩu, hệ thống gửi email gồm liên kết `/specialized/login` trên origin đầu tiên của `FRONTEND_URL`, tên đăng nhập và mật khẩu tạm. Mật khẩu chỉ lưu bcrypt, không trả plaintext qua API. Response có `student`, `emailSent`, `message`. Nếu dịch vụ email chưa được cấu hình, dừng trước khi tạo/đổi tài khoản. Nếu gửi lỗi sau khi lưu, tài khoản vẫn tồn tại; sửa cấu hình email rồi đặt lại mật khẩu để gửi email mới. Sinh viên dùng email cấp lại mới nhất.
 
 Đăng nhập bằng `username`, `password`; trả JWT 8 giờ và `student.mustChangePassword`. Khi cờ này là `true`, chỉ được xem hồ sơ, đổi mật khẩu hoặc đăng xuất; API học trả `403 PASSWORD_CHANGE_REQUIRED`. Đổi mật khẩu cần `currentPassword`, `newPassword` tối thiểu 12 ký tự, tối đa 72 byte, khác mật khẩu cũ; response cấp JWT mới. Mật khẩu lưu bcrypt. Đổi/đặt lại mật khẩu, khóa/mở tài khoản, đăng xuất thu hồi các phiên cũ.
 

@@ -67,7 +67,15 @@ export function validateEnvironment(env: Record<string, unknown>) {
   const port = Number(env.PORT ?? 3000);
   if (!Number.isInteger(port) || port < 1 || port > 65535)
     throw new Error('PORT không hợp lệ.');
-  const mailKeys = ['GMAIL_USER', 'GMAIL_APP_PASSWORD'];
+  const mailProvider = String(env.MAIL_PROVIDER ?? 'gmail')
+    .trim()
+    .toLowerCase();
+  if (!['gmail', 'brevo'].includes(mailProvider))
+    throw new Error('MAIL_PROVIDER chỉ nhận gmail hoặc brevo.');
+  const mailKeys =
+    mailProvider === 'brevo'
+      ? ['BREVO_API_KEY', 'MAIL_FROM_EMAIL']
+      : ['GMAIL_USER', 'GMAIL_APP_PASSWORD'];
   const hasMailConfig = mailKeys.some(
     (key) => typeof env[key] === 'string' && String(env[key]).trim(),
   );
@@ -75,20 +83,36 @@ export function validateEnvironment(env: Record<string, unknown>) {
     for (const key of mailKeys) {
       if (typeof env[key] !== 'string' || !String(env[key]).trim())
         throw new Error(
-          `Thiếu ${key}. Điền Gmail gửi và mật khẩu ứng dụng trong server/.env.`,
+          `Thiếu ${key}. Cấu hình dịch vụ gửi email ${mailProvider} trong biến môi trường.`,
         );
     }
-    if (!isEmail(String(env.GMAIL_USER).trim()))
-      throw new Error('GMAIL_USER phải là địa chỉ email hợp lệ.');
-    if (String(env.GMAIL_APP_PASSWORD).replace(/\s/g, '').length !== 16)
-      throw new Error(
-        'GMAIL_APP_PASSWORD phải là mật khẩu ứng dụng Google gồm 16 ký tự.',
-      );
+    if (mailProvider === 'brevo') {
+      if (!isEmail(String(env.MAIL_FROM_EMAIL).trim()))
+        throw new Error(
+          'MAIL_FROM_EMAIL phải là địa chỉ email hợp lệ đã xác minh trong Brevo.',
+        );
+      if (/\s/.test(String(env.BREVO_API_KEY).trim()))
+        throw new Error(
+          'BREVO_API_KEY không được chứa khoảng trắng bên trong.',
+        );
+    } else {
+      if (!isEmail(String(env.GMAIL_USER).trim()))
+        throw new Error('GMAIL_USER phải là địa chỉ email hợp lệ.');
+      if (String(env.GMAIL_APP_PASSWORD).replace(/\s/g, '').length !== 16)
+        throw new Error(
+          'GMAIL_APP_PASSWORD phải là mật khẩu ứng dụng Google gồm 16 ký tự.',
+        );
+    }
   }
   return {
     ...env,
     DNS_SERVERS: dnsServers.join(','),
     PORT: port,
+    MAIL_PROVIDER: mailProvider,
+    BREVO_API_KEY: String(env.BREVO_API_KEY ?? '').trim(),
+    MAIL_FROM_EMAIL: String(env.MAIL_FROM_EMAIL ?? '')
+      .trim()
+      .toLowerCase(),
     GMAIL_USER: String(env.GMAIL_USER ?? '')
       .trim()
       .toLowerCase(),
