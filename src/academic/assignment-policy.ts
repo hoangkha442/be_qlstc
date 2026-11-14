@@ -26,3 +26,29 @@ export function assertAccepting(assignment: Assignment, now = new Date()) {
   if (!status.accepting)
     throw new BadRequestException(`Bài tập ${status.label.toLowerCase()}.`);
 }
+
+export function resubmissionPolicy(
+  assignment: Pick<
+    Assignment,
+    | 'archived'
+    | 'manuallyClosed'
+    | 'opensAt'
+    | 'dueAt'
+    | 'allowLate'
+    | 'allowResubmit'
+  >,
+  now = new Date(),
+) {
+  const status = assignmentStatus(assignment, now);
+  if (!status.accepting)
+    return {
+      allowed: false,
+      reason: `Bài tập ${status.label.toLowerCase()}. Liên hệ giảng viên nếu cần nộp lại.`,
+    };
+  if (!assignment.allowResubmit)
+    return {
+      allowed: false,
+      reason: 'Giảng viên chưa cho phép nộp lại bài tập này.',
+    };
+  return { allowed: true, reason: null };
+}

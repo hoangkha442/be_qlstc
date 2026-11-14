@@ -36,7 +36,10 @@ import {
   UPLOAD_LEASE_MS,
 } from '../config.js';
 import { AcademicService, escapeRegex } from '../academic/academic.service.js';
-import { assertAccepting } from '../academic/assignment-policy.js';
+import {
+  assertAccepting,
+  resubmissionPolicy,
+} from '../academic/assignment-policy.js';
 import { ListQuery } from '../academic/academic.dto.js';
 import {
   CloudinaryService,
@@ -596,7 +599,9 @@ export class SubmissionsService implements OnModuleInit, OnModuleDestroy {
         .lean(),
       this.db.assignments
         .findById(submission.assignmentId)
-        .select('title courseSectionId pathId category')
+        .select(
+          'title courseSectionId pathId category archived manuallyClosed opensAt dueAt allowLate allowResubmit',
+        )
         .lean(),
     ]);
     if (!savedVersion || !assignment)
@@ -630,6 +635,7 @@ export class SubmissionsService implements OnModuleInit, OnModuleDestroy {
       email: savedVersion.email ?? null,
       note: savedVersion.note,
       assignment: { id: assignment._id, title: assignment.title },
+      resubmission: resubmissionPolicy(assignment),
       courseSection: section,
       ...(path ? { learningPath: { id: path._id, title: path.title } } : {}),
       version,
@@ -787,7 +793,10 @@ export class SubmissionsService implements OnModuleInit, OnModuleDestroy {
     assignmentId: string,
     student: StudentRequest['student'],
   ) {
-    await this.academic.studentAssignment(assignmentId, student);
+    const assignment = await this.academic.studentAssignment(
+      assignmentId,
+      student,
+    );
     const submission = await this.db.submissions
       .findOne({
         assignmentId,
@@ -804,6 +813,7 @@ export class SubmissionsService implements OnModuleInit, OnModuleDestroy {
     );
     return {
       ...detail,
+      resubmission: resubmissionPolicy(assignment),
       versions: detail.versions.map((v) => ({
         ...v,
         files: v.files.map((file, index) => ({

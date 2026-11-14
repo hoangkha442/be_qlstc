@@ -136,6 +136,12 @@ Tra cứu cần body `receiptCode`, `secret`. Tải file cần thêm `version` l
 
 Response nộp bài có `emailSent` boolean và `message`. `emailSent: true` nghĩa là dịch vụ email đã nhận yêu cầu gửi thư. Nếu `false`, bài vẫn đã lưu thành công; sinh viên có thể lưu mã ngay trên màn hình hoặc thử lại cùng yêu cầu để gửi lại email. API tra cứu chỉ đọc bài, không gửi email.
 
+### Nộp lại khi gửi nhầm file
+
+Nộp lại dùng cùng API nộp bài, tạo một phiên bản mới với `Idempotency-Key` mới. Đại cương phải có mã bí mật của bài cũ; Chuyên ngành phải là tài khoản sở hữu bài nộp, không nhập mã bí mật. Mỗi phiên bản mới chứa toàn bộ file thay thế, không ghép với file cũ. File và điểm của các phiên bản cũ được giữ; phiên bản mới chưa có điểm. Đại cương tiếp tục nhận email biên nhận sau lần nộp lại theo cấu hình hiện tại.
+
+Biên nhận/tra cứu Đại cương và bài nộp cá nhân Chuyên ngành trả thêm `resubmission: { allowed, reason }` dựa trên quyền `allowResubmit`, thời gian mở/hạn nộp, `allowLate`, đóng thủ công và lưu trữ hiện tại. Không tự bật quyền nộp lại cho bài tập cũ. Giảng viên bật Cho nộp lại trong Sửa bài tập; nếu đã hết hạn phải điều chỉnh hạn hoặc cho nộp trễ. Server vẫn kiểm tra lại quyền, thời gian và file khi upload hoàn tất. Thử lại một yêu cầu đã lưu bằng cùng key không tạo thêm phiên bản, kể cả khi bài vừa đóng.
+
 ### Chấm điểm và xem kết quả
 
 Giảng viên chấm từng phiên bản bài nộp bằng `PATCH /api/lecturer/submissions/:id/grade`, dùng được cho cả Đại cương và Chuyên ngành. Body gồm `version` (từ 1), `score` (0–10, tối đa 2 số thập phân), `feedback` tùy chọn (tối đa 5000 ký tự), `sendEmail` tùy chọn (boolean, mặc định false) và `expectedRevision` (0 khi chưa chấm, hoặc `grade.revision` hiện tại khi sửa). Chỉ giảng viên sở hữu bài nộp được chấm. Sửa từ dữ liệu cũ trả 409 để tránh ghi đè điểm vừa được cập nhật; tải lại chi tiết trước khi chấm tiếp.
