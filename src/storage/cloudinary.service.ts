@@ -3,7 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { v2 as cloudinary } from 'cloudinary';
 import { Readable } from 'node:stream';
 import type { StoredFile } from '../database/schemas.js';
-import type { ValidatedOfficeFile } from './office-validator.js';
+import type { ValidatedSubmissionFile } from './validated-file.js';
 
 export class StorageUploadError extends ServiceUnavailableException {
   readonly definitiveRejection: boolean;
@@ -48,7 +48,7 @@ export class CloudinaryService {
     });
   }
   async upload(
-    file: ValidatedOfficeFile,
+    file: ValidatedSubmissionFile,
     publicId: string,
   ): Promise<StoredFile> {
     try {

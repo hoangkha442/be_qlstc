@@ -65,6 +65,8 @@ export class PublicSubmissionController {
         secret: { type: 'string' },
         files: {
           type: 'array',
+          description:
+            'File Office hoặc ảnh JPG/JPEG, PNG, WebP, GIF, AVIF, TIFF theo định dạng giảng viên cho phép.',
           maxItems: 5,
           items: { type: 'string', format: 'binary' },
         },

@@ -41,7 +41,7 @@ import {
   CloudinaryService,
   StorageUploadError,
 } from '../storage/cloudinary.service.js';
-import { validateOfficeFiles } from '../storage/office-validator.js';
+import { validateSubmissionFiles } from '../storage/submission-validator.js';
 import { validateSourceZip } from '../storage/source-zip-validator.js';
 import type { StudentRequest } from '../learning/student-auth.js';
 import {
@@ -230,7 +230,7 @@ export class SubmissionsService implements OnModuleInit, OnModuleDestroy {
         );
     const validated = student
       ? await validateSourceZip(files)
-      : await validateOfficeFiles(files, assignment);
+      : await validateSubmissionFiles(files, assignment);
     let submission = await this.db.submissions
       .findOne({ assignmentId, studentCodeNormalized: code })
       .select('+secretHash')

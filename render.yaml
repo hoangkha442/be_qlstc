@@ -20,7 +20,7 @@ services:
       - key: RECEIPT_SECRET
         sync: false
       - key: FRONTEND_URL
-        sync: false
+        value: https://hoangkha-learning.vercel.app
       - key: CLOUDINARY_CLOUD_NAME
         sync: false
       - key: CLOUDINARY_API_KEY

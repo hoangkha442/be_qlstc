@@ -79,13 +79,15 @@ Biến môi trường cần nhập trên Render:
 - `NODE_ENV=production`, `NODE_VERSION=24.22.1`, `TRUST_PROXY=1`, `MAIL_PROVIDER=brevo`.
 - `MONGODB_URI`: MongoDB Atlas hỗ trợ transaction. Trong Atlas Network Access, thêm các CIDR ở Render **Connect → Outbound**; không cần mở toàn bộ IP chỉ để triển khai.
 - `JWT_SECRET`, `RECEIPT_SECRET`: ít nhất 32 ký tự và khác nhau. **Nếu dùng database hiện tại, giữ các khóa đang dùng, đặc biệt `RECEIPT_SECRET` để tra cứu các bài đã nộp.** Blueprint yêu cầu nhập `RECEIPT_SECRET`, không tự tạo khóa thay thế cho database cũ.
-- `FRONTEND_URL`: origin HTTPS của frontend Vercel thực tế, không có dấu `/` cuối hoặc đường dẫn. Nếu nhiều origin, ngăn cách dấu phẩy và để địa chỉ production đầu tiên vì email dùng địa chỉ đó. Vercel preview có origin riêng; chỉ thêm origin cần dùng, không thay bằng ký tự `*`.
+- `FRONTEND_URL=https://hoangkha-learning.vercel.app`: origin HTTPS của frontend, không có dấu `/` cuối hoặc đường dẫn. Nếu nhiều origin, ngăn cách dấu phẩy và để địa chỉ production đầu tiên vì email dùng địa chỉ đó. Khi chạy local có thể dùng `https://hoangkha-learning.vercel.app,http://localhost:5173`. Vercel preview có origin riêng; chỉ thêm origin cần dùng, không thay bằng ký tự `*`.
 - `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, `CLOUDINARY_API_SECRET`: cùng Product Environment, dùng giá trị thật của hệ thống.
 - `BREVO_API_KEY`, `MAIL_FROM_EMAIL`: cấu hình theo phần Brevo phía trên.
 
 Render tự cung cấp `PORT`; server đã đọc biến này và lắng nghe `0.0.0.0`. Không chạy seed trong build hoặc start. Nếu đã dùng MongoDB cũ thì giữ tài khoản/dữ liệu cũ; nếu database mới chưa có giảng viên, chạy lệnh provision có chủ đích theo phần Tài khoản giảng viên.
 
 Sau deploy, mở URL thật của service kèm `/api/health`; kết quả cần có `status: ok` và `database: connected`. Sau đó trong Vercel Environment đặt `VITE_API_URL` bằng **URL backend thật + `/api`** và redeploy frontend vì Vite lấy giá trị khi build. Cập nhật `FRONTEND_URL` trên Render bằng domain Vercel production thực tế nếu khác giá trị ban đầu. `.env` local không tự chuyển sang Render và không đưa key backend vào biến frontend.
+
+Nếu email cấp tài khoản, đặt lại mật khẩu hoặc biên nhận vẫn chứa `localhost`, mở service backend trên Render → Environment và sửa `FRONTEND_URL=https://hoangkha-learning.vercel.app`, rồi lưu và redeploy. Link đăng nhập trong email mới sẽ là `https://hoangkha-learning.vercel.app/specialized/login`, link tra cứu là `https://hoangkha-learning.vercel.app/lookup`. Email đã gửi giữ nội dung cũ. Không đặt lại mật khẩu chỉ để sửa link; sinh viên có thể đăng nhập tại URL mới bằng thông tin của email còn hiệu lực.
 
 `render.yaml` dùng cho Blueprint của repo backend riêng; có thể dùng nó hoặc nhập các giá trị tương đương trong Dashboard. Tham khảo [Web Services](https://render.com/docs/web-services), [Node version](https://render.com/docs/node-version), [Outbound IP](https://render.com/docs/outbound-ip-addresses).
 
@@ -126,7 +128,9 @@ Nộp bài dùng `multipart/form-data`: `studentCode`, `fullName`, **`email` b�
 
 Email được chuẩn hóa chữ thường và kiểm tra định dạng. Sinh viên Đại cương không cần tài khoản: chỉ nhập thông tin, email và file để nộp bài; nhận mã xem lại bài qua email. Mỗi phiên bản lưu email riêng. Bài cũ vẫn tra cứu được, `email` có thể là `null`; không tự gửi thư hồi tố.
 
-Giới hạn: tối đa 5 file, 10 MiB/file, chỉ `doc`, `docx`, `ppt`, `pptx`, `xls`, `xlsx`. Backend kiểm tra nội dung Office, từ chối file macro, mã hóa hoặc nội dung không hợp lệ. Kiểm tra lại thời gian và quy định bài tập khi upload hoàn tất. File Cloudinary dùng raw/private.
+Giới hạn: tối đa 5 file, 10 MiB/file. Đại cương hỗ trợ Office (`doc`, `docx`, `ppt`, `pptx`, `xls`, `xlsx`) và ảnh (`jpg`, `jpeg`, `png`, `webp`, `gif`, `avif`, `tif`, `tiff`); chỉ nhận định dạng có trong `allowedExtensions` của bài tập. Bài tập mới mặc định hỗ trợ cả hai nhóm. Bài tập cũ giữ quy định đã lưu; giảng viên vào Sửa bài tập → Quy định file → Hình ảnh để bật định dạng cần nhận, không tự thay đổi dữ liệu cũ khi deploy.
+
+Backend kiểm tra cấu trúc Office và giải mã ảnh thật bằng Sharp; từ chối ảnh hỏng, đổi đuôi sai nội dung hoặc vượt giới hạn 40 triệu điểm ảnh/250 khung hình. File ảnh vẫn giữ nguyên nội dung gốc, tên và phần mở rộng khi lưu/tải; không chuyển đổi ảnh. Office vẫn bị từ chối khi có macro, mã hóa hoặc nội dung không hợp lệ. Kiểm tra lại thời gian và quy định bài tập khi upload hoàn tất. File Cloudinary dùng raw/private, cùng luồng biên nhận, lịch sử và xuất ZIP hiện tại. Không cần thay đổi biến môi trường cho tính năng ảnh.
 
 Tra cứu cần body `receiptCode`, `secret`. Tải file cần thêm `version` là số nguyên từ 1 và `fileIndex` từ 0. Mã bí mật truyền trong body, không đưa vào URL. API tải file trả nội dung đính kèm, không lộ URL Cloudinary.
 
@@ -136,7 +140,7 @@ Response nộp bài có `emailSent` boolean và `message`. `emailSent: true` ngh
 
 Backend lưu bài nộp thành công trước, sau đó gửi email qua dịch vụ được chọn trong cùng yêu cầu HTTP. Lỗi email không xóa bài hoặc tạo thêm phiên bản bài nộp. Không có bảng hàng đợi, tác vụ nền hoặc API quản lý email cho Đại cương.
 
-Email chứa MSSV, họ tên, học kỳ/năm học, lớp, môn, học phần, tên bài, phiên bản, thời gian Việt Nam, đúng/trễ hạn, danh sách file, mã biên nhận, mã bí mật và liên kết `/lookup`. Sinh viên dùng hai mã này để xem lại thông tin và tải file, không cần đăng nhập. Không đính kèm file Office hoặc URL Cloudinary. Mã bí mật được khôi phục khi gửi từ `RECEIPT_SECRET`, không lưu plaintext. HTML của dữ liệu nhập được escape. Giữ kín email này.
+Email chứa MSSV, họ tên, học kỳ/năm học, lớp, môn, học phần, tên bài, phiên bản, thời gian Việt Nam, đúng/trễ hạn, danh sách file, mã biên nhận, mã bí mật và liên kết `/lookup`. Sinh viên dùng hai mã này để xem lại thông tin và tải file, không cần đăng nhập. Không đính kèm file bài nộp hoặc URL Cloudinary. Mã bí mật được khôi phục khi gửi từ `RECEIPT_SECRET`, không lưu plaintext. HTML của dữ liệu nhập được escape. Giữ kín email này.
 
 Thử lại cùng `Idempotency-Key` và nội dung sẽ trả lại bài đã lưu và gửi lại email tới địa chỉ của phiên bản đó; không tạo phiên bản mới. Có thể nhận lại cùng mã qua nhiều email nếu thử lại nhiều lần. Không tự gửi lại ở nền hoặc gửi thư cũ từ collection email của bản trước.
 

@@ -8,6 +8,20 @@ import { isEmail } from 'class-validator';
 export const serverEnvPath = fileURLToPath(new URL('../.env', import.meta.url));
 
 export const OFFICE_EXTENSIONS = ['doc', 'docx', 'ppt', 'pptx', 'xls', 'xlsx'];
+export const IMAGE_EXTENSIONS = [
+  'jpg',
+  'jpeg',
+  'png',
+  'webp',
+  'gif',
+  'avif',
+  'tif',
+  'tiff',
+];
+export const GENERAL_SUBMISSION_EXTENSIONS = [
+  ...OFFICE_EXTENSIONS,
+  ...IMAGE_EXTENSIONS,
+];
 export const SYSTEM_MAX_FILES = 5;
 export const SYSTEM_MAX_FILE_BYTES = 10 * 1024 * 1024;
 export const SYSTEM_MAX_REQUEST_BYTES =

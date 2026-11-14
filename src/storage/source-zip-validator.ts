@@ -4,13 +4,13 @@ import { extname } from 'node:path';
 import { fromBuffer } from 'yauzl';
 import CRC32 from 'crc-32';
 import { safeFilename, SYSTEM_MAX_FILE_BYTES } from '../config.js';
-import type { ValidatedOfficeFile } from './office-validator.js';
+import type { ValidatedSubmissionFile } from './validated-file.js';
 
 const source =
   /\.(?:html?|css|scss|sass|less|[cm]?js|jsx|tsx?|vue|svelte|php|py|java|cs|go|rs|sql|c|cpp|h|hpp|rb|kt|swift|dart|ipynb)$/i;
 export async function validateSourceZip(
   files: Express.Multer.File[] | undefined,
-): Promise<ValidatedOfficeFile[]> {
+): Promise<ValidatedSubmissionFile[]> {
   if (files?.length !== 1)
     throw new BadRequestException(
       'Vui lòng nộp đúng một file ZIP chứa mã nguồn.',

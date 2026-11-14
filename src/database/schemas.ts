@@ -1,4 +1,5 @@
 import { Schema, Types } from 'mongoose';
+import { GENERAL_SUBMISSION_EXTENSIONS } from '../config.js';
 
 export interface BaseEntity {
   _id: Types.ObjectId;
@@ -190,13 +191,11 @@ export const AssignmentSchema: Schema<Assignment> = new Schema<Assignment>(
     allowResubmit: { type: Boolean, default: false },
     allowedExtensions: {
       type: [String],
-      default: ['doc', 'docx', 'ppt', 'pptx', 'xls', 'xlsx'],
+      default: GENERAL_SUBMISSION_EXTENSIONS,
       validate: {
         validator: (v: string[]) =>
           v.length > 0 &&
-          v.every((s) =>
-            ['doc', 'docx', 'ppt', 'pptx', 'xls', 'xlsx', 'zip'].includes(s),
-          ),
+          v.every((s) => [...GENERAL_SUBMISSION_EXTENSIONS, 'zip'].includes(s)),
       },
     },
     maxFiles: { type: Number, default: 5, min: 1, max: 5 },

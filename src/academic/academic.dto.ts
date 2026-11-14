@@ -25,7 +25,7 @@ import {
   ValidateNested,
 } from 'class-validator';
 import {
-  OFFICE_EXTENSIONS,
+  GENERAL_SUBMISSION_EXTENSIONS,
   SYSTEM_MAX_FILES,
   SYSTEM_MAX_FILE_BYTES,
 } from '../config.js';
@@ -107,12 +107,16 @@ export class AssignmentDto {
   @Optional()
   @IsBoolean()
   allowResubmit?: boolean;
-  @ApiPropertyOptional({ default: OFFICE_EXTENSIONS })
+  @ApiPropertyOptional({
+    enum: GENERAL_SUBMISSION_EXTENSIONS,
+    isArray: true,
+    default: GENERAL_SUBMISSION_EXTENSIONS,
+  })
   @Optional()
   @IsArray()
   @ArrayNotEmpty()
   @ArrayUnique()
-  @IsIn(OFFICE_EXTENSIONS, { each: true })
+  @IsIn(GENERAL_SUBMISSION_EXTENSIONS, { each: true })
   allowedExtensions?: string[];
   @ApiPropertyOptional({ default: 5 })
   @Optional()

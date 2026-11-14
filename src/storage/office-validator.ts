@@ -1,25 +1,7 @@
-import { BadRequestException, PayloadTooLargeException } from '@nestjs/common';
-import { extname } from 'node:path';
-import { createHash } from 'node:crypto';
 import * as CFB from 'cfb';
 import CRC32 from 'crc-32';
 import { XMLParser, XMLValidator } from 'fast-xml-parser';
 import { fromBuffer, type Entry } from 'yauzl';
-import type { Assignment } from '../database/schemas.js';
-import {
-  safeFilename,
-  SYSTEM_MAX_FILE_BYTES,
-  SYSTEM_MAX_FILES,
-} from '../config.js';
-
-const MIMES: Record<string, string> = {
-  doc: 'application/msword',
-  xls: 'application/vnd.ms-excel',
-  ppt: 'application/vnd.ms-powerpoint',
-  docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-  xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-  pptx: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
-};
 const DOCUMENTS: Record<string, { path: string; contentType: string }> = {
   docx: {
     path: 'word/document.xml',
@@ -37,14 +19,6 @@ const DOCUMENTS: Record<string, { path: string; contentType: string }> = {
       'application/vnd.openxmlformats-officedocument.presentationml.presentation.main+xml',
   },
 };
-
-export interface ValidatedOfficeFile {
-  buffer: Buffer;
-  originalName: string;
-  format: string;
-  bytes: number;
-  digest: string;
-}
 
 function validatePowerPointRecords(bytes: Buffer) {
   let records = 0;
@@ -280,54 +254,7 @@ function validateOpenXml(buffer: Buffer, extension: string): Promise<void> {
   });
 }
 
-export async function validateOfficeFiles(
-  files: Express.Multer.File[] | undefined,
-  assignment: Pick<
-    Assignment,
-    'allowedExtensions' | 'maxFiles' | 'maxFileBytes'
-  >,
-): Promise<ValidatedOfficeFile[]> {
-  if (!files?.length)
-    throw new BadRequestException('Vui lòng chọn ít nhất một file.');
-  if (files.length > Math.min(assignment.maxFiles, SYSTEM_MAX_FILES))
-    throw new BadRequestException(
-      `Chỉ được nộp tối đa ${assignment.maxFiles} file.`,
-    );
-  const validated: ValidatedOfficeFile[] = [];
-  for (const file of files) {
-    const originalName = safeFilename(file.originalname);
-    const format = extname(originalName).slice(1).toLowerCase();
-    if (!assignment.allowedExtensions.includes(format) || !MIMES[format])
-      throw new BadRequestException(
-        `File ${originalName}: định dạng không được chấp nhận.`,
-      );
-    if (file.size !== file.buffer.length || file.size < 1)
-      throw new BadRequestException(
-        `File ${originalName}: rỗng hoặc dung lượng không hợp lệ.`,
-      );
-    if (file.size > Math.min(assignment.maxFileBytes, SYSTEM_MAX_FILE_BYTES))
-      throw new PayloadTooLargeException(
-        `File ${originalName}: vượt quá ${assignment.maxFileBytes} byte.`,
-      );
-    if (file.mimetype.toLowerCase() !== MIMES[format])
-      throw new BadRequestException(
-        `File ${originalName}: MIME type không phù hợp định dạng ${format}.`,
-      );
-    try {
-      if (DOCUMENTS[format]) await validateOpenXml(file.buffer, format);
-      else validateCompound(file.buffer, format);
-    } catch {
-      throw new BadRequestException(
-        `File ${originalName}: cấu trúc Office không hợp lệ, chứa macro, bị mã hóa hoặc có nội dung nhúng không được hỗ trợ.`,
-      );
-    }
-    validated.push({
-      buffer: file.buffer,
-      originalName,
-      format,
-      bytes: file.size,
-      digest: createHash('sha256').update(file.buffer).digest('hex'),
-    });
-  }
-  return validated;
+export async function validateOfficeContent(buffer: Buffer, extension: string) {
+  if (DOCUMENTS[extension]) await validateOpenXml(buffer, extension);
+  else validateCompound(buffer, extension);
 }
