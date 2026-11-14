@@ -136,6 +136,16 @@ Tra cứu cần body `receiptCode`, `secret`. Tải file cần thêm `version` l
 
 Response nộp bài có `emailSent` boolean và `message`. `emailSent: true` nghĩa là dịch vụ email đã nhận yêu cầu gửi thư. Nếu `false`, bài vẫn đã lưu thành công; sinh viên có thể lưu mã ngay trên màn hình hoặc thử lại cùng yêu cầu để gửi lại email. API tra cứu chỉ đọc bài, không gửi email.
 
+### Chấm điểm và xem kết quả
+
+Giảng viên chấm từng phiên bản bài nộp bằng `PATCH /api/lecturer/submissions/:id/grade`, dùng được cho cả Đại cương và Chuyên ngành. Body gồm `version` (từ 1), `score` (0–10, tối đa 2 số thập phân), `feedback` tùy chọn (tối đa 5000 ký tự), `sendEmail` tùy chọn (boolean, mặc định false) và `expectedRevision` (0 khi chưa chấm, hoặc `grade.revision` hiện tại khi sửa). Chỉ giảng viên sở hữu bài nộp được chấm. Sửa từ dữ liệu cũ trả 409 để tránh ghi đè điểm vừa được cập nhật; tải lại chi tiết trước khi chấm tiếp.
+
+Điểm được lưu vào phiên bản, có thời gian chấm và người chấm. Phiên bản nộp lại bắt đầu chưa chấm; điểm phiên bản cũ được giữ. Danh sách bài nộp trả `grade` của phiên bản mới nhất; chi tiết, biên nhận và lịch sử trả điểm từng phiên bản. `grade` là null khi chưa chấm. Excel xuất thêm điểm, nhận xét và ngày chấm của phiên bản mới nhất; điểm 0 được giữ.
+
+Điểm công khai cho đúng sinh viên ngay sau khi lưu, không phụ thuộc chọn gửi email. Đại cương dùng `POST /api/public/receipts/lookup` với mã biên nhận và mã bí mật. Chuyên ngành dùng tài khoản được ghi danh để mở bài tập, xem `GET /api/student/assignments/:id/submission`, không cần mã bí mật. Không có API công khai để tìm điểm bằng MSSV/email.
+
+Chỉ gửi email khi `sendEmail=true`, tới email của phiên bản đang chấm; email chứa bài tập, phiên bản, điểm, nhận xét và link Vercel tương ứng. Đại cương vẫn dùng mã bí mật trong email biên nhận cũ khi tra cứu; email báo điểm không đặt mã bí mật trong URL. Email gửi qua nhà cung cấp đang chọn. Response có `emailRequested`, `emailSent`, `message`; lỗi gửi thư hoặc thiếu email không làm mất điểm đã lưu. Có thể mở Sửa điểm, chọn gửi email rồi lưu lại để chủ động gửi; không tự gửi nền hoặc gửi khi tra cứu. Không cần biến môi trường mới.
+
 ### Gửi mã xem lại bài
 
 Backend lưu bài nộp thành công trước, sau đó gửi email qua dịch vụ được chọn trong cùng yêu cầu HTTP. Lỗi email không xóa bài hoặc tạo thêm phiên bản bài nộp. Không có bảng hàng đợi, tác vụ nền hoặc API quản lý email cho Đại cương.

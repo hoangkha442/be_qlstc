@@ -73,6 +73,13 @@ export interface Submission extends BaseEntity {
   lockToken?: string | null;
   lockUntil?: Date | null;
 }
+export interface SubmissionGrade {
+  score: number;
+  feedback: string;
+  gradedAt: Date;
+  gradedBy: Types.ObjectId;
+  revision: number;
+}
 export interface SubmissionVersion extends BaseEntity {
   category: 'general' | 'specialized';
   submissionId: Types.ObjectId;
@@ -86,6 +93,7 @@ export interface SubmissionVersion extends BaseEntity {
   late: boolean;
   files: StoredFile[];
   requestKey: string;
+  grade?: SubmissionGrade;
 }
 export interface UploadBatch extends BaseEntity {
   requestKey: string;
@@ -264,6 +272,24 @@ SubmissionSchema.index(
     partialFilterExpression: { studentId: { $type: 'objectId' } },
   },
 );
+const SubmissionGradeSchema = new Schema<SubmissionGrade>(
+  {
+    score: {
+      type: Number,
+      required: true,
+      min: 0,
+      max: 10,
+      validate: (value: number) =>
+        Number.isFinite(value) &&
+        Math.abs(value * 100 - Math.round(value * 100)) < 1e-8,
+    },
+    feedback: { type: String, default: '', maxlength: 5000 },
+    gradedAt: { type: Date, required: true },
+    gradedBy: { type: Schema.Types.ObjectId, ref: 'Lecturer', required: true },
+    revision: { type: Number, required: true, min: 1 },
+  },
+  { _id: false },
+);
 export const SubmissionVersionSchema = new Schema<SubmissionVersion>(
   {
     category: {
@@ -286,6 +312,7 @@ export const SubmissionVersionSchema = new Schema<SubmissionVersion>(
       validate: (v: StoredFile[]) => v.length >= 1 && v.length <= 5,
     },
     requestKey: { type: String, required: true, unique: true, select: false },
+    grade: { type: SubmissionGradeSchema, required: false },
   },
   { ...options, collection: 'submissionVersions' },
 );

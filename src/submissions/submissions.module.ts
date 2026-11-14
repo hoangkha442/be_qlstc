@@ -6,6 +6,7 @@ import {
   HttpCode,
   Module,
   Param,
+  Patch,
   Post,
   Query,
   Req,
@@ -38,6 +39,7 @@ import {
   LookupReceiptDto,
   SubmitDto,
   ReceiptFileDto,
+  GradeSubmissionDto,
 } from './submission.dto.js';
 import { SubmissionsService } from './submissions.service.js';
 
@@ -114,6 +116,15 @@ export class PublicSubmissionController {
 @Controller('lecturer')
 export class LecturerSubmissionController {
   constructor(private readonly service: SubmissionsService) {}
+  @Patch('submissions/:id/grade')
+  @Throttle({ default: { limit: 20, ttl: 60000 } })
+  grade(
+    @Req() r: LecturerRequest,
+    @Param('id', ObjectIdPipe) id: string,
+    @Body() dto: GradeSubmissionDto,
+  ) {
+    return this.service.grade(r.lecturer.id, id, dto);
+  }
   @Get('submissions') list(@Req() r: LecturerRequest, @Query() q: ListQuery) {
     return this.service.list(r.lecturer.id, q);
   }

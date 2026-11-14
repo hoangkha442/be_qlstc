@@ -2,11 +2,15 @@ import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Transform, Type } from 'class-transformer';
 import {
   IsInt,
+  IsBoolean,
+  IsNumber,
   IsEmail,
   IsOptional,
   IsString,
   Matches,
   MaxLength,
+  Max,
+  ValidateIf,
   Min,
   MinLength,
 } from 'class-validator';
@@ -56,4 +60,41 @@ export class DownloadFileQuery {
 export class ReceiptFileDto extends LookupReceiptDto {
   @ApiProperty() @IsInt() @Min(1) version: number;
   @ApiProperty() @IsInt() @Min(0) fileIndex: number;
+}
+export class GradeSubmissionDto {
+  @ApiProperty({ description: 'Phiên bản bài nộp cần chấm.' })
+  @IsInt()
+  @Min(1)
+  version: number;
+
+  @ApiProperty({
+    minimum: 0,
+    maximum: 10,
+    description: 'Điểm thang 10, tối đa 2 chữ số thập phân.',
+  })
+  @IsNumber({ maxDecimalPlaces: 2, allowNaN: false, allowInfinity: false })
+  @Min(0)
+  @Max(10)
+  score: number;
+
+  @ApiPropertyOptional({ maxLength: 5000 })
+  @ValidateIf((_object: unknown, value: unknown) => value !== undefined)
+  @Transform(trim)
+  @IsString()
+  @MaxLength(5000)
+  feedback?: string;
+
+  @ApiPropertyOptional({ default: false })
+  @ValidateIf((_object: unknown, value: unknown) => value !== undefined)
+  @Transform(({ obj }: { obj: { sendEmail?: unknown } }) => obj.sendEmail)
+  @IsBoolean()
+  sendEmail?: boolean;
+
+  @ApiProperty({
+    minimum: 0,
+    description: '0 nếu chưa chấm; dùng grade.revision hiện tại khi sửa điểm.',
+  })
+  @IsInt()
+  @Min(0)
+  expectedRevision: number;
 }

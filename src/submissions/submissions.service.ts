@@ -26,6 +26,7 @@ import { Database } from '../database/database.module.js';
 import type {
   StoredFile,
   Submission,
+  SubmissionGrade,
   UploadBatch,
 } from '../database/schemas.js';
 import {
@@ -48,11 +49,21 @@ import {
   LookupReceiptDto,
   ReceiptFileDto,
   SubmitDto,
+  GradeSubmissionDto,
 } from './submission.dto.js';
 import { receiptSecret } from './receipt-secret.js';
 import { MailService } from '../mail/mail.service.js';
 
 const hash = (s: string) => createHash('sha256').update(s).digest('hex');
+const gradeView = (grade?: SubmissionGrade) =>
+  grade
+    ? {
+        score: grade.score,
+        feedback: grade.feedback,
+        gradedAt: grade.gradedAt,
+        revision: grade.revision,
+      }
+    : null;
 function verifySecret(secret: string | undefined, secretHash: string) {
   return (
     typeof secret === 'string' &&
@@ -626,6 +637,7 @@ export class SubmissionsService implements OnModuleInit, OnModuleDestroy {
       isLatest: version === submission.latestVersion,
       submittedAt: savedVersion.submittedAt,
       late: savedVersion.late,
+      grade: gradeView(savedVersion.grade),
       files: savedVersion.files.map((f) => ({
         originalName: f.originalName,
         bytes: f.bytes,
@@ -672,6 +684,7 @@ export class SubmissionsService implements OnModuleInit, OnModuleDestroy {
         note: v.note,
         submittedAt: v.submittedAt,
         late: v.late,
+        grade: gradeView(v.grade),
         files: v.files.map((f) => ({
           originalName: f.originalName,
           bytes: f.bytes,
@@ -720,11 +733,17 @@ export class SubmissionsService implements OnModuleInit, OnModuleDestroy {
     ]);
     const versions = await this.db.versions
       .find({ submissionId: { $in: items.map((s) => s._id) } })
-      .select('submissionId version files')
+      .select('submissionId version files grade')
       .lean();
     return {
       items: items.map((s) => ({
         ...s,
+        grade: gradeView(
+          versions.find(
+            (v) =>
+              v.submissionId.equals(s._id) && v.version === s.latestVersion,
+          )?.grade,
+        ),
         files:
           versions
             .find(
@@ -773,6 +792,7 @@ export class SubmissionsService implements OnModuleInit, OnModuleDestroy {
       .findOne({
         assignmentId,
         studentId: student.id,
+        lecturerId: student.lecturerId,
         category: 'specialized',
         latestVersion: { $gt: 0 },
       })
@@ -817,6 +837,88 @@ export class SubmissionsService implements OnModuleInit, OnModuleDestroy {
     );
     return this.file(student.lecturerId, id, version, fileIndex, res);
   }
+  async grade(lecturerId: string, id: string, dto: GradeSubmissionDto) {
+    const submission = await this.db.submissions
+      .findOne({ _id: id, lecturerId, latestVersion: { $gt: 0 } })
+      .lean();
+    if (!submission) throw new NotFoundException('Không tìm thấy bài nộp.');
+    const assignment = await this.db.assignments
+      .findOne({ _id: submission.assignmentId, lecturerId })
+      .select('title')
+      .lean();
+    if (!assignment) throw new NotFoundException('Không tìm thấy bài tập.');
+    const filter = {
+      submissionId: submission._id,
+      assignmentId: submission.assignmentId,
+      lecturerId,
+      version: dto.version,
+    };
+    const saved = await this.db.versions
+      .findOneAndUpdate(
+        {
+          ...filter,
+          ...(dto.expectedRevision === 0
+            ? { grade: null }
+            : { 'grade.revision': dto.expectedRevision }),
+        },
+        {
+          $set: {
+            grade: {
+              score: dto.score,
+              feedback: dto.feedback?.trim() ?? '',
+              gradedAt: new Date(),
+              gradedBy: lecturerId,
+              revision: dto.expectedRevision + 1,
+            },
+          },
+        },
+        { returnDocument: 'after', runValidators: true },
+      )
+      .lean();
+    if (!saved) {
+      if (!(await this.db.versions.exists(filter)))
+        throw new NotFoundException('Không tìm thấy phiên bản bài nộp.');
+      throw new ConflictException(
+        'Điểm đã được cập nhật. Vui lòng tải lại bài nộp trước khi chấm tiếp.',
+      );
+    }
+    const grade = saved.grade!;
+    const emailRequested = dto.sendEmail === true;
+    let emailSent = false;
+    if (emailRequested && saved.email) {
+      try {
+        emailSent = await this.mail.sendGrade({
+          email: saved.email,
+          fullName: saved.fullName,
+          studentCode: submission.studentCodeNormalized,
+          assignmentId: submission.assignmentId.toString(),
+          assignment: assignment.title,
+          category: submission.category ?? 'general',
+          receiptCode: submission.receiptCode,
+          version: saved.version,
+          score: grade.score,
+          feedback: grade.feedback,
+          gradedAt: grade.gradedAt,
+        });
+      } catch {
+        this.logger.warn('Chưa gửi được email báo điểm. Điểm đã được lưu.');
+      }
+    }
+    return {
+      submissionId: submission._id,
+      version: saved.version,
+      grade: gradeView(grade),
+      emailRequested,
+      emailSent,
+      message: !emailRequested
+        ? 'Đã lưu điểm. Sinh viên có thể xem kết quả trong bài nộp.'
+        : emailSent
+          ? 'Đã lưu điểm và gửi email thông báo cho sinh viên.'
+          : saved.email
+            ? 'Đã lưu điểm nhưng chưa gửi được email. Sinh viên vẫn xem được kết quả trong bài nộp.'
+            : 'Đã lưu điểm. Bài nộp chưa có email để gửi thông báo.',
+    };
+  }
   async detail(lecturerId: string, id: string) {
     const submission = await this.db.submissions
       .findOne({ _id: id, lecturerId, latestVersion: { $gt: 0 } })
@@ -828,8 +930,12 @@ export class SubmissionsService implements OnModuleInit, OnModuleDestroy {
       .lean();
     return {
       ...submission,
+      grade: gradeView(
+        versions.find((v) => v.version === submission.latestVersion)?.grade,
+      ),
       versions: versions.map((v) => ({
         ...v,
+        grade: gradeView(v.grade),
         isLatest: v.version === submission.latestVersion,
         files: v.files.map((f, fileIndex) => ({
           originalName: f.originalName,
@@ -937,6 +1043,9 @@ export class SubmissionsService implements OnModuleInit, OnModuleDestroy {
       { header: 'Phiên bản', key: 'version', width: 12 },
       { header: 'File', key: 'files', width: 60 },
       { header: 'Ghi chú', key: 'note', width: 35 },
+      { header: 'Điểm /10', key: 'score', width: 14 },
+      { header: 'Nhận xét', key: 'feedback', width: 50 },
+      { header: 'Ngày chấm (Việt Nam)', key: 'gradedAt', width: 25 },
     ];
     const cursor = this.db.submissions
       .find({ lecturerId, assignmentId, latestVersion: { $gt: 0 } })
@@ -970,6 +1079,15 @@ export class SubmissionsService implements OnModuleInit, OnModuleDestroy {
             version: submission.latestVersion,
             files: latest?.files.map((f) => f.originalName).join('\n') ?? '',
             note: submission.note,
+            score: latest?.grade?.score ?? '',
+            feedback: latest?.grade?.feedback ?? '',
+            gradedAt: latest?.grade?.gradedAt
+              ? new Intl.DateTimeFormat('vi-VN', {
+                  timeZone: 'Asia/Ho_Chi_Minh',
+                  dateStyle: 'short',
+                  timeStyle: 'medium',
+                }).format(latest.grade.gradedAt)
+              : '',
           })
           .commit();
       }

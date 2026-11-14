@@ -25,6 +25,20 @@ interface ReceiptEmail {
   files: { originalName: string; bytes: number; format: string }[];
 }
 
+interface GradeEmail {
+  email: string;
+  fullName: string;
+  studentCode: string;
+  assignmentId: string;
+  assignment: string;
+  category: 'general' | 'specialized';
+  receiptCode: string;
+  version: number;
+  score: number;
+  feedback: string;
+  gradedAt: Date;
+}
+
 interface OutgoingEmail {
   to: { name: string; address: string };
   subject: string;
@@ -150,6 +164,35 @@ export class MailService {
       });
     } catch {
       this.logger.warn('Chưa gửi được email tài khoản sinh viên.');
+      return false;
+    }
+  }
+
+  async sendGrade(grade: GradeEmail): Promise<boolean> {
+    if (!this.isConfigured()) return false;
+    try {
+      const origin = this.config
+        .getOrThrow<string>('FRONTEND_URL')
+        .split(',')[0];
+      const url = `${origin}${grade.category === 'specialized' ? `/specialized/assignments/${grade.assignmentId}` : '/lookup'}`;
+      const time = new Intl.DateTimeFormat('vi-VN', {
+        timeZone: 'Asia/Ho_Chi_Minh',
+        dateStyle: 'short',
+        timeStyle: 'medium',
+      }).format(grade.gradedAt);
+      const instructions =
+        grade.category === 'specialized'
+          ? 'Đăng nhập tài khoản sinh viên để xem bài nộp và điểm.'
+          : `Mã biên nhận: ${grade.receiptCode}. Dùng mã bí mật đã nhận khi nộp bài để xem lại bài và điểm.`;
+      const subject = `${BRAND_NAME} · Kết quả chấm bài · ${grade.assignment.replace(/[\r\n]/g, ' ')}`;
+      return await this.sendMessage({
+        to: { name: grade.fullName, address: grade.email },
+        subject,
+        text: `Chào ${grade.fullName},\n\nSinh viên: ${grade.studentCode}\nBài tập: ${grade.assignment}\nPhiên bản: ${grade.version}\nĐiểm: ${grade.score}/10\nNhận xét: ${grade.feedback || 'Không có nhận xét.'}\nChấm lúc (Việt Nam): ${time}\n\nXem kết quả: ${url}\n${instructions}`,
+        html: `<div style="font:15px/1.7 Arial,sans-serif;max-width:620px;margin:auto"><p>${BRAND_NAME}</p><h2>Kết quả chấm bài</h2><p>Chào ${escapeHtml(grade.fullName)},</p><p>Sinh viên: ${escapeHtml(grade.studentCode)}<br>Bài tập: <strong>${escapeHtml(grade.assignment)}</strong><br>Phiên bản: ${grade.version}</p><p style="font-size:24px;font-weight:700">${grade.score}/10</p><h3>Nhận xét</h3><p style="white-space:pre-wrap">${escapeHtml(grade.feedback || 'Không có nhận xét.')}</p><p>Chấm lúc (Việt Nam): ${escapeHtml(time)}</p><p><a href="${escapeHtml(url)}">Xem bài nộp và điểm</a></p><p>${escapeHtml(instructions)}</p></div>`,
+      });
+    } catch {
+      this.logger.warn('Chưa gửi được email báo điểm. Điểm đã được lưu.');
       return false;
     }
   }
