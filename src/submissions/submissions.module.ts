@@ -68,7 +68,7 @@ export class PublicSubmissionController {
         files: {
           type: 'array',
           description:
-            'File Office hoặc ảnh JPG/JPEG, PNG, WebP, GIF, AVIF, TIFF theo định dạng giảng viên cho phép.',
+            'File theo allowedExtensions của bài tập; thư mục được client nén thành ZIP khi định dạng ZIP được cho phép.',
           maxItems: 5,
           items: { type: 'string', format: 'binary' },
         },

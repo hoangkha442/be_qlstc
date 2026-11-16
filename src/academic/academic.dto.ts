@@ -26,6 +26,9 @@ import {
 } from 'class-validator';
 import {
   GENERAL_SUBMISSION_EXTENSIONS,
+  SUBMISSION_EXTENSION_PATTERN,
+  MAX_SUBMISSION_EXTENSIONS,
+  normalizeSubmissionExtensions,
   SYSTEM_MAX_FILES,
   SYSTEM_MAX_FILE_BYTES,
 } from '../config.js';
@@ -108,15 +111,21 @@ export class AssignmentDto {
   @IsBoolean()
   allowResubmit?: boolean;
   @ApiPropertyOptional({
-    enum: GENERAL_SUBMISSION_EXTENSIONS,
     isArray: true,
+    type: String,
+    description:
+      'Các phần mở rộng được nhận, ví dụ pdf, zip, png, html hoặc tar.gz. Không gồm dấu chấm đầu.',
     default: GENERAL_SUBMISSION_EXTENSIONS,
   })
   @Optional()
   @IsArray()
   @ArrayNotEmpty()
+  @ArrayMaxSize(MAX_SUBMISSION_EXTENSIONS)
+  @Transform(({ value }: { value: unknown }) =>
+    normalizeSubmissionExtensions(value),
+  )
   @ArrayUnique()
-  @IsIn(GENERAL_SUBMISSION_EXTENSIONS, { each: true })
+  @Matches(SUBMISSION_EXTENSION_PATTERN, { each: true })
   allowedExtensions?: string[];
   @ApiPropertyOptional({ default: 5 })
   @Optional()
@@ -136,9 +145,6 @@ export class UpdateAssignmentDto extends PartialType(AssignmentDto, {
 }) {}
 export class SpecializedAssignmentContentDto extends OmitType(AssignmentDto, [
   'courseSectionId',
-  'allowedExtensions',
-  'maxFiles',
-  'maxFileBytes',
 ] as const) {}
 export type AssignmentPlacement = { moduleId?: string; lessonId?: string };
 export class SpecializedAssignmentDto extends SpecializedAssignmentContentDto {

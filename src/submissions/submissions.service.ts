@@ -46,7 +46,6 @@ import {
   StorageUploadError,
 } from '../storage/cloudinary.service.js';
 import { validateSubmissionFiles } from '../storage/submission-validator.js';
-import { validateSourceZip } from '../storage/source-zip-validator.js';
 import type { StudentRequest } from '../learning/student-auth.js';
 import {
   LookupReceiptDto,
@@ -242,9 +241,7 @@ export class SubmissionsService implements OnModuleInit, OnModuleDestroy {
       : await this.academic.assertActiveSection(
           assignment.courseSectionId!.toString(),
         );
-    const validated = student
-      ? await validateSourceZip(files)
-      : await validateSubmissionFiles(files, assignment);
+    const validated = await validateSubmissionFiles(files, assignment);
     let submission = await this.db.submissions
       .findOne({ assignmentId, studentCodeNormalized: code })
       .select('+secretHash')

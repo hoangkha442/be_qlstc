@@ -1,38 +1,15 @@
-import { BadRequestException, PayloadTooLargeException } from '@nestjs/common';
-import { createHash } from 'node:crypto';
-import { extname } from 'node:path';
+import { BadRequestException } from '@nestjs/common';
 import { fromBuffer } from 'yauzl';
 import CRC32 from 'crc-32';
-import { safeFilename, SYSTEM_MAX_FILE_BYTES } from '../config.js';
-import type { ValidatedSubmissionFile } from './validated-file.js';
 
-const source =
-  /\.(?:html?|css|scss|sass|less|[cm]?js|jsx|tsx?|vue|svelte|php|py|java|cs|go|rs|sql|c|cpp|h|hpp|rb|kt|swift|dart|ipynb)$/i;
-export async function validateSourceZip(
-  files: Express.Multer.File[] | undefined,
-): Promise<ValidatedSubmissionFile[]> {
-  if (files?.length !== 1)
+export async function validateZipContent(buffer: Buffer) {
+  if (buffer.length < 4 || buffer.readUInt32LE(0) !== 0x04034b50)
     throw new BadRequestException(
-      'Vui lòng nộp đúng một file ZIP chứa mã nguồn.',
-    );
-  const file = files[0];
-  if (
-    !file.buffer ||
-    file.buffer.length < 4 ||
-    extname(file.originalname).toLowerCase() !== '.zip'
-  )
-    throw new BadRequestException(
-      'Bài Chuyên ngành yêu cầu file ZIP chứa mã nguồn.',
-    );
-  if (file.buffer.length > SYSTEM_MAX_FILE_BYTES)
-    throw new PayloadTooLargeException('File ZIP tối đa 10 MB.');
-  if (file.buffer.readUInt32LE(0) !== 0x04034b50)
-    throw new BadRequestException(
-      'File ZIP không hợp lệ hoặc không có mã nguồn.',
+      'File ZIP không hợp lệ hoặc không có nội dung.',
     );
   await new Promise<void>((resolve, reject) => {
     fromBuffer(
-      file.buffer,
+      buffer,
       { lazyEntries: true, validateEntrySizes: true, strictFileNames: true },
       (error, zip) => {
         if (error || !zip) {
@@ -42,7 +19,7 @@ export async function validateSourceZip(
         let ended = false,
           count = 0,
           total = 0,
-          hasSource = false;
+          hasContent = false;
         const names = new Set<string>();
         const fail = (message: string) => {
           if (!ended) {
@@ -57,11 +34,11 @@ export async function validateSourceZip(
         zip.on('end', () => {
           if (ended) return;
           ended = true;
-          if (hasSource) resolve();
+          if (hasContent) resolve();
           else
             reject(
               new BadRequestException(
-                'ZIP cần chứa ít nhất một file mã nguồn như HTML, CSS, JS, TS hoặc PHP.',
+                'ZIP cần chứa ít nhất một file có nội dung.',
               ),
             );
         });
@@ -82,7 +59,7 @@ export async function validateSourceZip(
           }
           names.add(normalized);
           if (/(?:^|\/)(?:node_modules|\.git)(?:\/|$)/i.test(name)) {
-            fail('Bỏ thư mục node_modules và .git trước khi nén mã nguồn.');
+            fail('Bỏ node_modules và .git trước khi nén thư mục.');
             return;
           }
           if (
@@ -132,7 +109,7 @@ export async function validateSourceZip(
                 fail('ZIP không đầy đủ hoặc sai mã kiểm tra dữ liệu.');
                 return;
               }
-              if (bytes > 0 && source.test(name)) hasSource = true;
+              if (bytes > 0) hasContent = true;
               zip.readEntry();
             });
           });
@@ -141,13 +118,4 @@ export async function validateSourceZip(
       },
     );
   });
-  return [
-    {
-      buffer: file.buffer,
-      originalName: safeFilename(file.originalname),
-      format: 'zip',
-      bytes: file.buffer.length,
-      digest: createHash('sha256').update(file.buffer).digest('hex'),
-    },
-  ];
 }

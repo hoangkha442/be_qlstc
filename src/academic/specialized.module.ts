@@ -162,20 +162,20 @@ class SpecializedStudentController {
         note: { type: 'string' },
         files: {
           type: 'array',
-          maxItems: 1,
+          maxItems: 5,
           items: { type: 'string', format: 'binary' },
         },
       },
     },
   })
   @UseInterceptors(
-    FilesInterceptor('files', 1, {
+    FilesInterceptor('files', 5, {
       storage: memoryStorage(),
       limits: {
         fileSize: SYSTEM_MAX_FILE_BYTES,
-        files: 1,
+        files: 5,
         fields: 1,
-        parts: 2,
+        parts: 6,
         fieldSize: 8192,
       },
     }),

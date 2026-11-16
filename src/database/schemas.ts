@@ -1,5 +1,10 @@
 import { Schema, Types } from 'mongoose';
-import { GENERAL_SUBMISSION_EXTENSIONS } from '../config.js';
+import {
+  GENERAL_SUBMISSION_EXTENSIONS,
+  MAX_SUBMISSION_EXTENSIONS,
+  SUBMISSION_EXTENSION_PATTERN,
+  normalizeSubmissionExtensions,
+} from '../config.js';
 
 export interface BaseEntity {
   _id: Types.ObjectId;
@@ -200,10 +205,13 @@ export const AssignmentSchema: Schema<Assignment> = new Schema<Assignment>(
     allowedExtensions: {
       type: [String],
       default: GENERAL_SUBMISSION_EXTENSIONS,
+      set: normalizeSubmissionExtensions,
       validate: {
         validator: (v: string[]) =>
           v.length > 0 &&
-          v.every((s) => [...GENERAL_SUBMISSION_EXTENSIONS, 'zip'].includes(s)),
+          v.length <= MAX_SUBMISSION_EXTENSIONS &&
+          new Set(v).size === v.length &&
+          v.every((s) => SUBMISSION_EXTENSION_PATTERN.test(s)),
       },
     },
     maxFiles: { type: Number, default: 5, min: 1, max: 5 },
