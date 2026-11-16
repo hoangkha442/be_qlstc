@@ -18,10 +18,6 @@ export const IMAGE_EXTENSIONS = [
   'tif',
   'tiff',
 ];
-export const GENERAL_SUBMISSION_EXTENSIONS = [
-  ...OFFICE_EXTENSIONS,
-  ...IMAGE_EXTENSIONS,
-];
 export const SUBMISSION_EXTENSION_PATTERN =
   /^[a-z0-9][a-z0-9_-]{0,15}(?:\.[a-z0-9][a-z0-9_-]{0,15}){0,2}$/;
 export const MAX_SUBMISSION_EXTENSIONS = 64;
@@ -46,7 +42,7 @@ export function submissionFileExtension(filename: string, allowed: string[]) {
       .find((extension) => name.endsWith(`.${extension}`)) ?? ''
   );
 }
-export const SYSTEM_MAX_FILES = 5;
+export const SYSTEM_MAX_FILES = 10;
 export const SYSTEM_MAX_FILE_BYTES = 10 * 1024 * 1024;
 export const SYSTEM_MAX_REQUEST_BYTES =
   SYSTEM_MAX_FILES * SYSTEM_MAX_FILE_BYTES + 64 * 1024;

@@ -25,7 +25,6 @@ import {
   ValidateNested,
 } from 'class-validator';
 import {
-  GENERAL_SUBMISSION_EXTENSIONS,
   SUBMISSION_EXTENSION_PATTERN,
   MAX_SUBMISSION_EXTENSIONS,
   normalizeSubmissionExtensions,
@@ -110,14 +109,12 @@ export class AssignmentDto {
   @Optional()
   @IsBoolean()
   allowResubmit?: boolean;
-  @ApiPropertyOptional({
+  @ApiProperty({
     isArray: true,
     type: String,
     description:
       'Các phần mở rộng được nhận, ví dụ pdf, zip, png, html hoặc tar.gz. Không gồm dấu chấm đầu.',
-    default: GENERAL_SUBMISSION_EXTENSIONS,
   })
-  @Optional()
   @IsArray()
   @ArrayNotEmpty()
   @ArrayMaxSize(MAX_SUBMISSION_EXTENSIONS)
@@ -126,8 +123,8 @@ export class AssignmentDto {
   )
   @ArrayUnique()
   @Matches(SUBMISSION_EXTENSION_PATTERN, { each: true })
-  allowedExtensions?: string[];
-  @ApiPropertyOptional({ default: 5 })
+  allowedExtensions: string[];
+  @ApiPropertyOptional({ default: SYSTEM_MAX_FILES })
   @Optional()
   @IsInt()
   @Min(1)

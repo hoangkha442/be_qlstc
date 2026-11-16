@@ -1,6 +1,6 @@
 import { Schema, Types } from 'mongoose';
 import {
-  GENERAL_SUBMISSION_EXTENSIONS,
+  SYSTEM_MAX_FILES,
   MAX_SUBMISSION_EXTENSIONS,
   SUBMISSION_EXTENSION_PATTERN,
   normalizeSubmissionExtensions,
@@ -204,7 +204,8 @@ export const AssignmentSchema: Schema<Assignment> = new Schema<Assignment>(
     allowResubmit: { type: Boolean, default: false },
     allowedExtensions: {
       type: [String],
-      default: GENERAL_SUBMISSION_EXTENSIONS,
+      required: true,
+      default: undefined,
       set: normalizeSubmissionExtensions,
       validate: {
         validator: (v: string[]) =>
@@ -214,7 +215,12 @@ export const AssignmentSchema: Schema<Assignment> = new Schema<Assignment>(
           v.every((s) => SUBMISSION_EXTENSION_PATTERN.test(s)),
       },
     },
-    maxFiles: { type: Number, default: 5, min: 1, max: 5 },
+    maxFiles: {
+      type: Number,
+      default: SYSTEM_MAX_FILES,
+      min: 1,
+      max: SYSTEM_MAX_FILES,
+    },
     maxFileBytes: { type: Number, default: 10485760, min: 1, max: 10485760 },
   },
   { ...options, collection: 'assignments' },
@@ -317,7 +323,8 @@ export const SubmissionVersionSchema = new Schema<SubmissionVersion>(
     files: {
       type: [FileSchema],
       required: true,
-      validate: (v: StoredFile[]) => v.length >= 1 && v.length <= 5,
+      validate: (v: StoredFile[]) =>
+        v.length >= 1 && v.length <= SYSTEM_MAX_FILES,
     },
     requestKey: { type: String, required: true, unique: true, select: false },
     grade: { type: SubmissionGradeSchema, required: false },

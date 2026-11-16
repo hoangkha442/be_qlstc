@@ -69,7 +69,7 @@ export class PublicSubmissionController {
           type: 'array',
           description:
             'File theo allowedExtensions của bài tập; thư mục được client nén thành ZIP khi định dạng ZIP được cho phép.',
-          maxItems: 5,
+          maxItems: SYSTEM_MAX_FILES,
           items: { type: 'string', format: 'binary' },
         },
       },

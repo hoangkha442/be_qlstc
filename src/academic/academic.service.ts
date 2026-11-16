@@ -9,6 +9,7 @@ import type { ClientSession } from 'mongoose';
 import { Database } from '../database/database.module.js';
 import type { Assignment } from '../database/schemas.js';
 import { assignmentStatus } from './assignment-policy.js';
+import { SYSTEM_MAX_FILES } from '../config.js';
 import {
   AssignmentDto,
   CatalogDto,
@@ -481,8 +482,8 @@ export class AcademicService {
           lecturerId,
           pathId,
           category: 'specialized',
-          allowedExtensions: content.allowedExtensions ?? ['zip'],
-          maxFiles: content.maxFiles ?? 1,
+          allowedExtensions: content.allowedExtensions,
+          maxFiles: content.maxFiles ?? SYSTEM_MAX_FILES,
           maxFileBytes: content.maxFileBytes ?? 10485760,
         },
       ],

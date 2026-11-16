@@ -46,7 +46,7 @@ import {
 import { SubmissionsModule } from '../submissions/submissions.module.js';
 import { SubmissionsService } from '../submissions/submissions.service.js';
 import { DownloadFileQuery } from '../submissions/submission.dto.js';
-import { SYSTEM_MAX_FILE_BYTES } from '../config.js';
+import { SYSTEM_MAX_FILE_BYTES, SYSTEM_MAX_FILES } from '../config.js';
 
 class SourceSubmissionDto {
   @ApiPropertyOptional()
@@ -162,20 +162,20 @@ class SpecializedStudentController {
         note: { type: 'string' },
         files: {
           type: 'array',
-          maxItems: 5,
+          maxItems: SYSTEM_MAX_FILES,
           items: { type: 'string', format: 'binary' },
         },
       },
     },
   })
   @UseInterceptors(
-    FilesInterceptor('files', 5, {
+    FilesInterceptor('files', SYSTEM_MAX_FILES, {
       storage: memoryStorage(),
       limits: {
         fileSize: SYSTEM_MAX_FILE_BYTES,
-        files: 5,
+        files: SYSTEM_MAX_FILES,
         fields: 1,
-        parts: 6,
+        parts: SYSTEM_MAX_FILES + 1,
         fieldSize: 8192,
       },
     }),
