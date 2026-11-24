@@ -208,6 +208,19 @@ Tài liệu là liên kết HTTPS trong `resources`: `title`, `url`, `kind` (`do
 
 Ghi danh cần `studentId`, `active` mặc định `true`; gọi lại cùng sinh viên/lộ trình cập nhật bản ghi cũ. Đặt `active: false` để thu hồi. Chỉ ghi danh sinh viên thuộc giảng viên quản lý lộ trình.
 
+### File tài liệu bài học
+
+API tạo `POST /api/lecturer/learning-modules/:id/lessons` và sửa `PATCH /api/lecturer/lessons/:id` nhận JSON như cũ hoặc multipart: một trường `data` chứa JSON DTO và các trường `files` chứa file mới. Có thể lưu cùng nội dung, video, liên kết tài liệu và bài tập. Giới hạn tổng cộng 10 file/bài học, 10 MiB/file. Hỗ trợ Office, PDF, JPG/JPEG/PNG/WebP/GIF/AVIF/TIF/TIFF, ZIP/RAR/7z/TAR/GZ/TAR.GZ và các file văn bản/mã nguồn phổ biến; danh sách ở `src/learning/lesson-files.ts`. Backend kiểm nội dung bằng bộ kiểm Office/ảnh/tài liệu hiện có; RAR/7z kiểm chữ ký, không giải nén trên server.
+
+Khi sửa, `keepFileIds` là mảng UUID file hiện có cần giữ. Bỏ trường này giữ toàn bộ file cũ; `[]` gỡ hết file cũ. File mới được thêm vào danh sách giữ lại. ID không thuộc bài học bị từ chối. Không nhận metadata Cloudinary từ client. `resources` tiếp tục là danh sách liên kết HTTPS, còn `files` trả về metadata `id`, `originalName`, `bytes`, `format`, `uploadedAt`; không trả URL lưu trữ riêng tư.
+
+- Giảng viên tải/xem: `GET /api/lecturer/lessons/:id/files/:fileId`.
+- Sinh viên tải/xem: `GET /api/student/lessons/:id/files/:fileId`.
+
+Các API file yêu cầu JWT đúng vai trò. Giảng viên phải sở hữu bài học; sinh viên phải đang ghi danh, đã đổi mật khẩu và lộ trình/chương/bài đều đã công bố, chưa lưu trữ. Chế độ xem trước không cấp tài liệu. File được lưu dạng raw/private trên Cloudinary và truyền qua backend.
+
+Ý định upload và việc gỡ file được ghi vào collection `lessonFileCleanup`. Sau thời gian chờ 15 phút, tác vụ nền kiểm tra tham chiếu rồi dọn file không còn sử dụng; lỗi dọn được thử lại, không xóa file đang gắn với bài học. Điều này xử lý cả upload dở dang, lỗi lưu DB và khởi động lại server. Lưu trữ bài học vẫn giữ file. Không cần biến môi trường mới; khởi động backend sẽ tạo schema/index cho collection mới.
+
 ### API học
 
 | Thao tác               | API                                       |

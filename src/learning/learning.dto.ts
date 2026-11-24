@@ -11,6 +11,7 @@ import {
   IsMongoId,
   IsString,
   IsUrl,
+  IsUUID,
   Matches,
   Max,
   MaxLength,
@@ -171,6 +172,17 @@ export class ResourceDto {
   kind: 'document' | 'source_code' | 'link';
 }
 export class LessonDto extends AssignmentAttachmentsDto {
+  @ApiPropertyOptional({
+    type: [String],
+    description:
+      'ID file hiện có cần giữ khi sửa bài học. Bỏ trường này để giữ toàn bộ file cũ.',
+  })
+  @optional()
+  @IsArray()
+  @ArrayMaxSize(10)
+  @ArrayUnique()
+  @IsUUID('4', { each: true })
+  keepFileIds?: string[];
   @ApiProperty()
   @Transform(trim)
   @IsString()

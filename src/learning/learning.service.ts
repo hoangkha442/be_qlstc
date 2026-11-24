@@ -7,6 +7,10 @@ import {
 import { hash } from 'bcryptjs';
 import { randomBytes } from 'node:crypto';
 import type { ClientSession } from 'mongoose';
+import type { Response } from 'express';
+import { pipeline } from 'node:stream/promises';
+import { CloudinaryService } from '../storage/cloudinary.service.js';
+import { LessonFilesService, lessonView } from './lesson-files.js';
 import { Database } from '../database/database.module.js';
 import { MailService } from '../mail/mail.service.js';
 import { AcademicService, escapeRegex } from '../academic/academic.service.js';
@@ -56,6 +60,8 @@ export class LearningService {
     private readonly db: Database,
     private readonly mail: MailService,
     private readonly academic: AcademicService,
+    private readonly lessonFiles: LessonFilesService,
+    private readonly storage: CloudinaryService,
   ) {}
   async students(lecturerId: string, q: LearningQuery) {
     const filter = {
@@ -211,7 +217,7 @@ export class LearningService {
         lessons: lessons
           .filter((l) => l.moduleId.equals(m._id))
           .map((l) => ({
-            ...l,
+            ...lessonView(l),
             assignments: assignments.filter((a) => a.lessonId?.equals(l._id)),
           })),
       })),
@@ -333,12 +339,33 @@ export class LearningService {
     });
   }
   private lessonData(dto: LessonDto | UpdateLessonDto) {
-    const { removeVideo, assignments, assignmentIds, ...data } = dto;
+    const { removeVideo, assignments, assignmentIds, keepFileIds, ...data } =
+      dto;
     if (removeVideo && data.videoUrl)
       throw new BadRequestException('Không thể vừa xóa vừa đặt video.');
-    return { data, removeVideo, assignments, assignmentIds };
+    return { data, removeVideo, assignments, assignmentIds, keepFileIds };
   }
-  async createLesson(lecturerId: string, moduleId: string, dto: LessonDto) {
+  async createLesson(
+    lecturerId: string,
+    moduleId: string,
+    dto: LessonDto,
+    files: Express.Multer.File[] = [],
+  ) {
+    this.lessonData(dto);
+    this.lessonFiles.select([], dto.keepFileIds, files.length);
+    const ownerModule = await this.db.learningModules
+      .findOne({ _id: moduleId, lecturerId, archived: false })
+      .lean();
+    if (!ownerModule) throw new NotFoundException('Không tìm thấy chương học.');
+    const ownerPath = await this.ownedPath(
+      lecturerId,
+      ownerModule.pathId.toString(),
+    );
+    if (ownerPath.archived)
+      throw new BadRequestException(
+        'Không thể thêm bài học vào lộ trình đã lưu trữ.',
+      );
+    const uploaded = await this.lessonFiles.upload(lecturerId, files);
     return this.db.connection.transaction(async (session) => {
       const module = await this.db.learningModules
         .findOne({ _id: moduleId, lecturerId, archived: false })
@@ -356,6 +383,7 @@ export class LearningService {
         [
           {
             ...data,
+            files: uploaded,
             lecturerId,
             moduleId,
             pathId: module.pathId,
@@ -370,22 +398,42 @@ export class LearningService {
         { assignments, assignmentIds },
         session,
       );
-      return { ...lesson.toObject(), assignments: linked };
+      return { ...lessonView(lesson.toObject()), assignments: linked };
     });
   }
   async updateLesson(
     lecturerId: string,
     id: string,
     dto: UpdateLessonDto | { archived: boolean },
+    files: Express.Multer.File[] = [],
   ) {
-    const { data, removeVideo, assignments, assignmentIds } = this.lessonData(
-      dto as UpdateLessonDto,
-    );
+    const { data, removeVideo, assignments, assignmentIds, keepFileIds } =
+      this.lessonData(dto as UpdateLessonDto);
+    const owner = await this.db.lessons.findOne({ _id: id, lecturerId }).lean();
+    if (!owner) throw new NotFoundException('Không tìm thấy bài học.');
+    this.lessonFiles.select(owner.files ?? [], keepFileIds, files.length);
+    const uploaded = await this.lessonFiles.upload(lecturerId, files);
     return this.db.connection.transaction(async (session) => {
+      const current = await this.db.lessons
+        .findOne({ _id: id, lecturerId })
+        .session(session)
+        .lean();
+      if (!current) throw new NotFoundException('Không tìm thấy bài học.');
+      const retained = this.lessonFiles.select(
+        current.files ?? [],
+        keepFileIds,
+        uploaded.length,
+      );
+      await this.lessonFiles.queueRemoved(
+        (current.files ?? []).filter(
+          (file) => !retained.some((kept) => kept.id === file.id),
+        ),
+        session,
+      );
       const result = await this.db.lessons.findOneAndUpdate(
         { _id: id, lecturerId },
         {
-          $set: data,
+          $set: { ...data, files: [...retained, ...uploaded] },
           ...(removeVideo ? { $unset: { videoUrl: '' } } : {}),
         },
         { returnDocument: 'after', runValidators: true, session },
@@ -398,7 +446,7 @@ export class LearningService {
         { assignments, assignmentIds },
         session,
       );
-      return { ...result.toObject(), assignments: linked };
+      return { ...lessonView(result.toObject()), assignments: linked };
     });
   }
   async enroll(lecturerId: string, pathId: string, dto: EnrollmentDto) {
@@ -489,7 +537,7 @@ export class LearningService {
       durationSeconds: lesson.durationSeconds,
       isPreview: lesson.isPreview,
       hasVideo: Boolean(lesson.videoUrl),
-      resourceCount: lesson.resources.length,
+      resourceCount: lesson.resources.length + (lesson.files?.length ?? 0),
       accessible: enrolled || lesson.isPreview,
       completed,
     };
@@ -604,14 +652,33 @@ export class LearningService {
           .lean()
       : [];
     return {
-      ...lesson,
+      ...lessonView(lesson),
       resources: enrolled ? lesson.resources : [],
+      files: enrolled ? lessonView(lesson).files : [],
       enrolled,
       assignments: assignments.map((assignment) => ({
         ...assignment,
         status: assignmentStatus(assignment),
       })),
     };
+  }
+  async lessonFile(
+    lecturerId: string,
+    id: string,
+    fileId: string,
+    res: Response,
+    studentId?: string,
+  ) {
+    if (studentId) await this.studentLesson(studentId, lecturerId, id, true);
+    const lesson = await this.db.lessons
+      .findOne({ _id: id, lecturerId })
+      .lean();
+    const file = lesson?.files?.find((file) => file.id === fileId);
+    if (!file) throw new NotFoundException('Không tìm thấy tài liệu bài học.');
+    const stream = await this.storage.download(file);
+    res.attachment(file.originalName).type('application/octet-stream');
+    res.setHeader('Content-Length', file.bytes);
+    await pipeline(stream, res);
   }
   async progress(
     studentId: string,

@@ -1,17 +1,35 @@
 import {
   Body,
+  applyDecorators,
   Controller,
   Get,
   HttpCode,
   Module,
   Param,
+  ParseUUIDPipe,
   Patch,
   Post,
   Query,
   Req,
+  Res,
+  UploadedFiles,
   UseGuards,
+  UseInterceptors,
 } from '@nestjs/common';
-import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
+import {
+  ApiBearerAuth,
+  ApiBody,
+  ApiConsumes,
+  ApiExtraModels,
+  ApiTags,
+  getSchemaPath,
+} from '@nestjs/swagger';
+import { FilesInterceptor } from '@nestjs/platform-express';
+import { memoryStorage } from 'multer';
+import type { Response } from 'express';
+import { SYSTEM_MAX_FILES, SYSTEM_MAX_FILE_BYTES } from '../config.js';
+import { CloudinaryService } from '../storage/cloudinary.service.js';
+import { LessonBodyInterceptor, LessonFilesService } from './lesson-files.js';
 import { Throttle } from '@nestjs/throttler';
 import { LecturerGuard } from '../auth/auth.module.js';
 import type { LecturerRequest } from '../auth/auth.module.js';
@@ -35,6 +53,49 @@ import {
   UpdateLessonDto,
   UpdateStudentDto,
 } from './learning.dto.js';
+
+const LessonUpload = (dto: typeof LessonDto | typeof UpdateLessonDto) =>
+  applyDecorators(
+    ApiExtraModels(dto),
+    ApiConsumes('application/json', 'multipart/form-data'),
+    ApiBody({
+      schema: {
+        anyOf: [
+          { $ref: getSchemaPath(dto) },
+          {
+            type: 'object',
+            required: ['data'],
+            properties: {
+              data: {
+                type: 'string',
+                description:
+                  'JSON LessonDto/UpdateLessonDto khi dùng multipart. JSON thông thường vẫn gửi DTO trực tiếp.',
+              },
+              files: {
+                type: 'array',
+                maxItems: SYSTEM_MAX_FILES,
+                items: { type: 'string', format: 'binary' },
+              },
+            },
+          },
+        ],
+      },
+    }),
+    UseInterceptors(
+      FilesInterceptor('files', SYSTEM_MAX_FILES, {
+        storage: memoryStorage(),
+        limits: {
+          fileSize: SYSTEM_MAX_FILE_BYTES,
+          files: SYSTEM_MAX_FILES,
+          fields: 1,
+          fieldSize: 1024 * 1024,
+          parts: SYSTEM_MAX_FILES + 1,
+          headerPairs: 30,
+        },
+      }),
+      LessonBodyInterceptor,
+    ),
+  );
 
 @ApiTags('Danh mục đào tạo')
 @Controller('public/categories')
@@ -145,19 +206,37 @@ export class LecturerLearningController {
   ) {
     return this.service.updateModule(r.lecturer.id, id, dto);
   }
-  @Post('learning-modules/:id/lessons') createLesson(
+  @Post('learning-modules/:id/lessons')
+  @Throttle({ default: { limit: 10, ttl: 60000 } })
+  @LessonUpload(LessonDto)
+  createLesson(
     @Req() r: LecturerRequest,
     @Param('id', ObjectIdPipe) id: string,
     @Body() dto: LessonDto,
+    @UploadedFiles() files: Express.Multer.File[],
   ) {
-    return this.service.createLesson(r.lecturer.id, id, dto);
+    return this.service.createLesson(r.lecturer.id, id, dto, files);
   }
-  @Patch('lessons/:id') updateLesson(
+  @Patch('lessons/:id')
+  @Throttle({ default: { limit: 10, ttl: 60000 } })
+  @LessonUpload(UpdateLessonDto)
+  updateLesson(
     @Req() r: LecturerRequest,
     @Param('id', ObjectIdPipe) id: string,
     @Body() dto: UpdateLessonDto,
+    @UploadedFiles() files: Express.Multer.File[],
   ) {
-    return this.service.updateLesson(r.lecturer.id, id, dto);
+    return this.service.updateLesson(r.lecturer.id, id, dto, files);
+  }
+  @Get('lessons/:id/files/:fileId')
+  @Throttle({ default: { limit: 30, ttl: 60000 } })
+  lessonFile(
+    @Req() r: LecturerRequest,
+    @Param('id', ObjectIdPipe) id: string,
+    @Param('fileId', new ParseUUIDPipe({ version: '4' })) fileId: string,
+    @Res() res: Response,
+  ) {
+    return this.service.lessonFile(r.lecturer.id, id, fileId, res);
   }
   @Patch('lessons/:id/archive') archiveLesson(
     @Req() r: LecturerRequest,
@@ -206,6 +285,22 @@ export class StudentLearningController {
   ) {
     return this.service.studentLesson(r.student.id, r.student.lecturerId, id);
   }
+  @Get('lessons/:id/files/:fileId')
+  @Throttle({ default: { limit: 30, ttl: 60000 } })
+  lessonFile(
+    @Req() r: StudentRequest,
+    @Param('id', ObjectIdPipe) id: string,
+    @Param('fileId', new ParseUUIDPipe({ version: '4' })) fileId: string,
+    @Res() res: Response,
+  ) {
+    return this.service.lessonFile(
+      r.student.lecturerId,
+      id,
+      fileId,
+      res,
+      r.student.id,
+    );
+  }
   @Patch('lessons/:id/progress') progress(
     @Req() r: StudentRequest,
     @Param('id', ObjectIdPipe) id: string,
@@ -228,7 +323,13 @@ export class StudentLearningController {
     StudentAuthController,
     StudentLearningController,
   ],
-  providers: [LearningService, StudentGuard],
+  providers: [
+    LearningService,
+    StudentGuard,
+    CloudinaryService,
+    LessonFilesService,
+    LessonBodyInterceptor,
+  ],
   exports: [StudentGuard],
 })
 export class LearningModule {}

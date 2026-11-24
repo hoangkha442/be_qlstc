@@ -234,19 +234,17 @@ AssignmentSchema.index({
   lessonId: 1,
   archived: 1,
 });
-const FileSchema = new Schema<StoredFile>(
-  {
-    originalName: { ...text, maxlength: 255 },
-    publicId: { type: String, required: true },
-    resourceType: { type: String, enum: ['raw'], required: true },
-    deliveryType: { type: String, enum: ['private'], required: true },
-    secureUrl: { type: String, required: true },
-    format: { type: String, required: true },
-    bytes: { type: Number, required: true, min: 1 },
-    uploadedAt: { type: Date, required: true },
-  },
-  { _id: false },
-);
+export const storedFileFields = {
+  originalName: { ...text, maxlength: 255 },
+  publicId: { type: String, required: true },
+  resourceType: { type: String, enum: ['raw'], required: true },
+  deliveryType: { type: String, enum: ['private'], required: true },
+  secureUrl: { type: String, required: true },
+  format: { type: String, required: true },
+  bytes: { type: Number, required: true, min: 1 },
+  uploadedAt: { type: Date, required: true },
+};
+const FileSchema = new Schema<StoredFile>(storedFileFields, { _id: false });
 export const SubmissionSchema = new Schema<Submission>(
   {
     assignmentId: objectId('Assignment'),

@@ -23,6 +23,7 @@ export class Database implements OnModuleInit {
   readonly lessons: Model<L.Lesson>;
   readonly enrollments: Model<L.Enrollment>;
   readonly lessonProgress: Model<L.LessonProgress>;
+  readonly lessonFileCleanup: Model<L.LessonFileCleanup>;
 
   constructor(@InjectConnection() readonly connection: Connection) {
     this.lecturers = connection.model<S.Lecturer>('Lecturer', S.LecturerSchema);
@@ -65,6 +66,10 @@ export class Database implements OnModuleInit {
       L.LearningModuleSchema,
     );
     this.lessons = connection.model<L.Lesson>('Lesson', L.LessonSchema);
+    this.lessonFileCleanup = connection.model<L.LessonFileCleanup>(
+      'LessonFileCleanup',
+      L.LessonFileCleanupSchema,
+    );
     this.enrollments = connection.model<L.Enrollment>(
       'Enrollment',
       L.EnrollmentSchema,
@@ -92,6 +97,7 @@ export class Database implements OnModuleInit {
         this.learningPaths,
         this.learningModules,
         this.lessons,
+        this.lessonFileCleanup,
         this.enrollments,
         this.lessonProgress,
       ].map((model) => model.init()),

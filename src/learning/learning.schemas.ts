@@ -1,5 +1,7 @@
 import { Schema, Types } from 'mongoose';
-import type { BaseEntity } from '../database/schemas.js';
+import { storedFileFields } from '../database/schemas.js';
+import type { BaseEntity, StoredFile } from '../database/schemas.js';
+import { SYSTEM_MAX_FILES } from '../config.js';
 
 export interface Student extends BaseEntity {
   lecturerId: Types.ObjectId;
@@ -50,10 +52,19 @@ export interface Lesson extends BaseEntity {
   videoUrl?: string;
   durationSeconds: number;
   resources: LearningResource[];
+  files: LessonFile[];
   isPreview: boolean;
   order: number;
   published: boolean;
   archived: boolean;
+}
+export interface LessonFile extends StoredFile {
+  id: string;
+}
+export interface LessonFileCleanup extends BaseEntity {
+  publicId: string;
+  fileId: string;
+  retryAt: Date;
 }
 export interface Enrollment extends BaseEntity {
   lecturerId: Types.ObjectId;
@@ -152,6 +163,16 @@ export const LessonSchema = new Schema<Lesson>(
     videoUrl: { type: String, maxlength: 2048 },
     durationSeconds: { type: Number, default: 0, min: 0 },
     resources: { type: [ResourceSchema], default: [] },
+    files: {
+      type: [
+        new Schema<LessonFile>(
+          { ...storedFileFields, id: { type: String, required: true } },
+          { _id: false },
+        ),
+      ],
+      default: [],
+      validate: (files: LessonFile[]) => files.length <= SYSTEM_MAX_FILES,
+    },
     isPreview: { type: Boolean, default: false },
     order: { type: Number, default: 0, min: 0 },
     published: { type: Boolean, default: false },
@@ -159,6 +180,14 @@ export const LessonSchema = new Schema<Lesson>(
   { ...options, collection: 'lessons' },
 );
 LessonSchema.index({ pathId: 1, moduleId: 1, archived: 1, order: 1 });
+export const LessonFileCleanupSchema = new Schema<LessonFileCleanup>(
+  {
+    publicId: { type: String, required: true, unique: true },
+    fileId: { type: String, required: true },
+    retryAt: { type: Date, required: true, index: true },
+  },
+  { ...options, collection: 'lessonFileCleanup' },
+);
 export const EnrollmentSchema = new Schema<Enrollment>(
   {
     lecturerId: ref('Lecturer'),
