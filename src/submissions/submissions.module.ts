@@ -42,6 +42,10 @@ import {
   GradeSubmissionDto,
 } from './submission.dto.js';
 import { SubmissionsService } from './submissions.service.js';
+import {
+  SubmissionSummaryController,
+  SubmissionSummaryService,
+} from './submission-summary.js';
 
 @ApiTags('Nộp bài và biên nhận')
 @Controller('public')
@@ -166,8 +170,12 @@ export class LecturerSubmissionController {
 
 @Module({
   imports: [AcademicModule, MailModule],
-  controllers: [PublicSubmissionController, LecturerSubmissionController],
-  providers: [CloudinaryService, SubmissionsService],
+  controllers: [
+    PublicSubmissionController,
+    LecturerSubmissionController,
+    SubmissionSummaryController,
+  ],
+  providers: [CloudinaryService, SubmissionsService, SubmissionSummaryService],
   exports: [SubmissionsService],
 })
 export class SubmissionsModule {}

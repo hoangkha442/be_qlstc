@@ -277,6 +277,7 @@ SubmissionSchema.index(
   { unique: true },
 );
 SubmissionSchema.index({ lecturerId: 1, assignmentId: 1, submittedAt: -1 });
+SubmissionSchema.index({ lecturerId: 1, courseSectionId: 1, latestVersion: 1 });
 SubmissionSchema.index(
   { assignmentId: 1, studentId: 1 },
   {
